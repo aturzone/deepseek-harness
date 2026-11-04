@@ -57,6 +57,44 @@ it('serializes mutations, rejects nesting and keeps the queue usable after failu
   await rejection
   await second
   expect(order).toEqual([1, 2])
+  // A rejected nested transaction must not stall the queue for later callers.
+  await hmr.runExclusive(async () => { order.push(3) })
+  expect(order).toEqual([1, 2, 3])
+}, 10_000)
+
+it.each(['success', 'throw', 'reject'] as const)(
+  'accepts asynchronous descendants after a transaction settles with %s', async (settlement) => {
+    const { hmr } = await fixture()
+    const release = Promise.withResolvers<undefined>()
+    const failure = new Error('transaction failed')
+    let later!: Promise<string>
+    const operation = () => {
+      // A callback registered inside the transaction survives its settle; the
+      // stale transaction marker must not make its later work look nested.
+      later = release.promise.then(() => hmr.runExclusive(async () => 'later mutation'))
+      if (settlement === 'throw') throw failure
+      if (settlement === 'reject') return Promise.reject(failure)
+      return Promise.resolve('first mutation')
+    }
+    const first = hmr.runExclusive(operation)
+    if (settlement === 'success') await expect(first).resolves.toBe('first mutation')
+    else await expect(first).rejects.toBe(failure)
+    release.resolve(undefined)
+    await expect(later).resolves.toBe('later mutation')
+  },
+  10_000,
+)
+
+it('rejects descendant profile reconciliation after its transaction settled', async () => {
+  const { hmr } = await fixture()
+  const release = Promise.withResolvers<undefined>()
+  let later!: Promise<unknown>
+  await hmr.runExclusive(async () => {
+    later = release.promise.then(() => hmr.reconcileProfile())
+  })
+  release.resolve(undefined)
+  // Settled transaction state must not pass the in-transaction guard.
+  await expect(later).rejects.toThrow('must run inside runExclusive')
 })
 
 it('holds configuration handlers behind configuration mutations', async () => {
@@ -252,3 +290,22 @@ it('rebinds configuration handlers when its provider is reconfigured within a re
   current?.emit('change', file)
   await vi.waitFor(() => { expect(refresh).toHaveBeenCalledOnce() })
 })
+
+it('accepts a transaction started by a timer registered inside a settled transaction', async () => {
+  const { ctx, hmr } = await fixture()
+  const observed = Promise.withResolvers<string>()
+  let settled = false
+  // The incident path: a plugin registers a timer from inside apply()'s
+  // transaction, then the timer writes configuration after the transaction ends.
+  await hmr.runExclusive(async () => {
+    ctx.interval(() => {
+      if (!settled) return
+      hmr.runExclusive(async () => 'later mutation').then(
+        () => { observed.resolve('ok') },
+        (error) => { observed.resolve((error as Error).message) },
+      )
+    }, 10)
+    settled = true
+  })
+  await expect(observed.promise).resolves.toBe('ok')
+}, 10_000)
