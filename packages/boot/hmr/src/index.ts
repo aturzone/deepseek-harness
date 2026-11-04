@@ -252,7 +252,12 @@ class Hmr extends Service {
   /** Stashed file changes waiting to be processed */
   private stashed = new Set<string>()
   private operations: Promise<unknown> = Promise.resolve()
-  private readonly executing = new AsyncLocalStorage<boolean>()
+  /**
+   * Current transaction marker. The stored object is mutated to `active: false`
+   * when its transaction settles, so timers and promise callbacks registered
+   * inside the transaction stop counting as transaction work after it ends.
+   */
+  private readonly executing = new AsyncLocalStorage<{ active: boolean }>()
   private applicationReady: Promise<boolean> = Promise.resolve(true)
   private closing = false
   private readonly configPaths = new Set<string>()
@@ -266,10 +271,15 @@ class Hmr extends Service {
    * @returns The operation result after its asynchronous work completes.
    */
   runExclusive<T>(operation: () => Promise<T>): Promise<T> {
-    if (this.executing.getStore()) return Promise.reject(new Error('HMR transactions cannot be nested'))
+    if (this.executing.getStore()?.active === true) return Promise.reject(new Error('HMR transactions cannot be nested'))
     const task = this.operations.then(async () => {
       if (this.closing) throw new Error('HMR is disposed')
-      return this.executing.run(true, operation)
+      const transaction = { active: true }
+      try {
+        return await this.executing.run(transaction, operation)
+      } finally {
+        transaction.active = false
+      }
     })
     this.operations = task.catch(() => {})
     return task
@@ -292,7 +302,7 @@ class Hmr extends Service {
     for (const path of paths) this.configPaths.add(path)
     try {
       const dispose = await this.executing.exit(() => watchExactConfig(
-        this.ownerContext, filename, this.config, () => this.runReload(refresh), () => this.executing.getStore() === true,
+        this.ownerContext, filename, this.config, () => this.runReload(refresh), () => this.executing.getStore()?.active === true,
       ))
       return async () => {
         await dispose()
@@ -360,7 +370,7 @@ class Hmr extends Service {
       this.closing = true
       await this.watcher?.close()
       // A configuration reload may remove its own HMR entry.
-      if (!this.executing.getStore()) await this.operations
+      if (this.executing.getStore()?.active !== true) await this.operations
       this.manifests.dispose()
     }
 
@@ -928,7 +938,7 @@ class Hmr extends Service {
    * replacement plugin that fails to load or start, whose previous code no longer runs.
    */
   async reconcileProfile(requiredIds: readonly string[] = []): Promise<ProfileReconciliation> {
-    if (this.executing.getStore() !== true) throw new Error('HMR profile reconciliation must run inside runExclusive')
+    if (this.executing.getStore()?.active !== true) throw new Error('HMR profile reconciliation must run inside runExclusive')
     const profile = this.ownerContext.get('profileContext')
     if (profile === undefined) throw new Error('HMR profile reconciliation requires profileContext')
     // Entries this recomposition stops start again, and fail it when they cannot.
