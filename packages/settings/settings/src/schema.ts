@@ -30,12 +30,28 @@ function plainSchema(schema: z): z {
   return result
 }
 
+/**
+ * Recognize a Schemastery Config schema across package copies.
+ *
+ * The vendored runtime marks its prototype with the global `Symbol.for('schemastery')`
+ * and always injects `meta`; a plugin Config exported as a plain Standard Schema object
+ * carries neither, so form projection cannot read its meta graph.
+ *
+ * @param value Plugin Config export or a nested schema node.
+ * @returns Whether Schemastery form projection can read the schema's meta graph.
+ */
+export function isSchemasterySchema(value: unknown): value is z {
+  if (value === null || (typeof value !== 'object' && typeof value !== 'function')) return false
+  const meta: unknown = Reflect.get(value, 'meta')
+  return Reflect.get(value, Symbol.for('schemastery')) === true && meta !== null && typeof meta === 'object'
+}
+
 /** Select fields whose nearest volatile ancestor makes them editable without remounting.
  * @param schema The plugin's Config schema.
  * @returns A plain form schema, or undefined when no field is live.
  */
 export function volatileForm(schema: z): z | undefined {
-  if (schema.meta.volatile) return plainSchema(schema)
+  if (schema.meta?.volatile) return plainSchema(schema)
   if (schema.type === 'object') {
     const dict = Object.fromEntries(Object.entries(schema.dict ?? {}).flatMap(([key, child]) => {
       const field = volatileForm(child)
@@ -72,7 +88,7 @@ export function projectForm(schema: z, value: unknown): unknown {
  * @returns Whether the path can be edited live.
  */
 export function isVolatilePath(schema: z, path: readonly string[]): boolean {
-  if (schema.meta.volatile) return true
+  if (schema.meta?.volatile) return true
   const [key, ...rest] = path
   const child = key === undefined ? undefined : schema.dict?.[key]
   return child !== undefined && isVolatilePath(child, rest)

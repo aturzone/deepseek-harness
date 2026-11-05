@@ -1,7 +1,7 @@
 /** Form projection preserves live containers and removes secret defaults. */
 import { expect, it } from 'vitest'
 import z from '@deepseek-ai/schemastery'
-import { isVolatilePath, plainConfig, projectForm, volatileForm } from '../src/schema.ts'
+import { isSchemasterySchema, isVolatilePath, plainConfig, projectForm, volatileForm } from '../src/schema.ts'
 
 it('exposes nested live fields while omitting ordinary fields', () => {
   const schema = z.object({
@@ -39,4 +39,20 @@ it('omits an object schema with no declared fields', () => {
   const schema = new z({ type: 'object' })
   expect(volatileForm(schema)).toBeUndefined()
   expect(projectForm(schema, { undeclared: true })).toEqual({})
+})
+
+it('rejects a Standard Schema Config that is not a Schemastery schema', () => {
+  // The Loader accepts any Standard Schema as plugin Config, but form projection needs Schemastery's meta graph.
+  const standardSchema = {
+    '~standard': { version: 1 as const, vendor: 'other', validate: (value: unknown) => ({ value }) },
+    toJSON: () => ({ type: 'object', properties: {} }),
+  }
+  expect(isSchemasterySchema(standardSchema)).toBe(false)
+  expect(isSchemasterySchema(undefined)).toBe(false)
+  expect(isSchemasterySchema(z.object({ fixed: z.string() }))).toBe(true)
+  // Form projection must survive a node whose meta graph is absent, even if a caller skips the guard.
+  const metaLess = z.object({ fixed: z.string(), live: z.number().volatile() })
+  Object.defineProperty(metaLess, 'meta', { value: undefined })
+  expect(volatileForm(metaLess)).toBeDefined()
+  expect(isVolatilePath(metaLess, ['live'])).toBe(true)
 })
