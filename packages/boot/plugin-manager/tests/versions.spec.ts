@@ -2,6 +2,11 @@
 import { expect, it } from 'vitest'
 import { newerVersions, versionFacts } from '../src/versions.ts'
 
+it('reads a single-version answer printed as a string', () => {
+  expect(newerVersions({ versions: '2.0.0', 'dist-tags': { latest: '2.0.0' } }, '1.0.0'))
+    .toEqual([{ version: '2.0.0', tags: ['latest'], prerelease: false }])
+})
+
 it('reads one version\'s manifest, keeping the asked identity when the answer omits it', () => {
   const bundle = { bundle: { patch: './p.yml' } }
   expect(versionFacts({ name: 'x', version: '1.0.0', engines: { dsh: '>=1' }, peerDependencies: { a: '1' }, deprecated: 'old', dsh: bundle }, 'y', '2.0.0')).toEqual({
@@ -30,6 +35,26 @@ it('drops a greater-version line that predates the installed build and orders la
   }, '0.2.6')).toEqual([
     { version: '0.2.7', publishedAt: '2026-11-05T00:00:00.000Z', tags: ['latest'], prerelease: false },
   ])
+})
+
+it('orders a mid-line latest ahead of other newer versions even when it is not semver-greatest', () => {
+  expect(newerVersions({
+    versions: ['0.2.6', '0.2.7', '0.2.8', '0.2.9'],
+    time: {
+      '0.2.6': '2026-11-01T00:00:00.000Z',
+      '0.2.7': '2026-11-02T00:00:00.000Z',
+      '0.2.8': '2026-11-03T00:00:00.000Z',
+    },
+    'dist-tags': { latest: '0.2.7' },
+  }, '0.2.6').map(version => version.version)).toEqual(['0.2.7', '0.2.9', '0.2.8'])
+})
+
+it('keeps a candidate published without a recorded time when the installed time is known', () => {
+  expect(newerVersions({
+    versions: ['0.2.6', '0.2.7', '0.2.9'],
+    time: { '0.2.6': '2026-11-01T00:00:00.000Z', '0.2.7': '2026-11-02T00:00:00.000Z' },
+    'dist-tags': { latest: '0.2.7' },
+  }, '0.2.6').map(version => version.version)).toEqual(['0.2.7', '0.2.9'])
 })
 
 it('falls back to publish time against the installed version when the latest tag is absent', () => {
