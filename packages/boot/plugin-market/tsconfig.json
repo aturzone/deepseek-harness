@@ -16,6 +16,7 @@
     { "path": "../../util/plugin-market-index" },
     { "path": "../../util/package-manifest" },
     { "path": "../../util/timeout" },
+    { "path": "../../util/output-retention" },
     { "path": "../../util/values" },
     { "path": "../../settings/settings" },
     { "path": "../../typert/protocol" },

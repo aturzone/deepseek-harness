@@ -110,6 +110,17 @@ it('lists plugins matching a query by relevance', async () => {
   expect((await call({ action: 'list_plugins', target: URL_A, query: '  ' })).json).toMatchObject({ total: 3 })
 })
 
+it('never cuts a market title or description inside a surrogate pair', async () => {
+  const text = `${'a'.repeat(299)}😀${'b'.repeat(10)}`
+  serve({ ...document, plugins: [{ name: 'dsh-emoji', description: { en: text }, versions: [{ version: '1.0.0', publishTimestamp: 0, source: { type: 'npm' } }] }] })
+  const { call } = await fixture()
+  const result = await call({ action: 'list_plugins', target: URL_A })
+  const description = (result.json as { entries: { description?: string }[] }).entries[0]?.description ?? ''
+  expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(description)).toBe(false)
+  // The cut drops the half pair instead of returning it with the ellipsis.
+  expect(description).toBe(`${'a'.repeat(299)}…`)
+})
+
 it('pages one plugin\'s versions with their compatibility and install targets', async () => {
   serve(document)
   const { call } = await fixture()
