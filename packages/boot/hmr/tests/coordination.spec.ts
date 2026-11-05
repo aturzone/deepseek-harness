@@ -302,7 +302,7 @@ it('accepts a transaction started by a timer registered inside a settled transac
       if (!settled) return
       hmr.runExclusive(async () => 'later mutation').then(
         () => { observed.resolve('ok') },
-        (error) => { observed.resolve((error as Error).message) },
+        (error: unknown) => { observed.resolve(error instanceof Error ? error.message : String(error)) },
       )
     }, 10)
     settled = true
