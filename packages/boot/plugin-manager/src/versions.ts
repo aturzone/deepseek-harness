@@ -30,6 +30,10 @@ function recordOf(value: unknown): Record<string, unknown> | undefined {
 
 /**
  * The published versions newer than the installed one, newest first.
+ *
+ * A valid `dist-tags.latest` decides the update line: a registry that renumbered its versions downward
+ * would otherwise make a semver-greater but older build look like an update. Without that tag, a
+ * candidate published before the installed version is dropped; the remaining candidates keep semver order.
  * @param answer - parsed `pnpm view <name> versions time dist-tags --json` output.
  * @param installed - the installed version.
  * @returns the newer versions with their publication times and dist-tags.
@@ -41,10 +45,26 @@ export function newerVersions(answer: unknown, installed: string): PublishedVers
   const listed: unknown = typeof fields?.versions === 'string' ? [fields.versions] : fields?.versions
   if (!Array.isArray(listed)) throw new Error('pnpm view answered no versions')
   const time = recordOf(fields?.time) ?? {}
-  const tags = Object.entries(recordOf(fields?.['dist-tags']) ?? {})
-  return listed
-    .filter((version): version is string => typeof version === 'string' && semver.valid(version) !== null && semver.gt(version, installed))
-    .sort(semver.rcompare)
+  const tagValues = recordOf(fields?.['dist-tags']) ?? {}
+  const tags = Object.entries(tagValues)
+  const valid = listed.filter((version): version is string => typeof version === 'string' && semver.valid(version) !== null)
+  const latest = typeof tagValues['latest'] === 'string' && semver.valid(tagValues['latest']) !== null ? tagValues['latest'] : undefined
+  // The registry's own current line outranks semver ordering: after a downward renumber, a greater
+  // version can be older code. Equal or lower latest means the installed version is current.
+  if (latest !== undefined && !semver.gt(latest, installed)) return []
+  const installedAt = typeof time[installed] === 'string' ? Date.parse(time[installed]) : Number.NaN
+  const newer = valid
+    .filter(version => semver.gt(version, installed))
+    .filter((version) => {
+      if (!Number.isFinite(installedAt)) return true
+      const published = time[version]
+      if (typeof published !== 'string') return true
+      const publishedAt = Date.parse(published)
+      // A candidate published before the installed build is from an older line, not an update.
+      return !Number.isFinite(publishedAt) || publishedAt >= installedAt
+    })
+    .sort((left, right) => (left === latest ? -1 : right === latest ? 1 : semver.rcompare(left, right)))
+  return newer
     .map((version) => {
       const published = time[version]
       return {
