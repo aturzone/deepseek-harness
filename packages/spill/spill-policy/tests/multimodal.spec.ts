@@ -87,6 +87,8 @@ async function setup(content: JsonValue[], maxInlineTokens: number, mode: 'nativ
     inputSchema: { type: 'object' }, call: async () => ({ content }),
   }))
   const session = Session.create(SessionId('mixed-spill'))
+  // PTC dispatch records are turn-scoped, so the fixture's run_code needs an open turn.
+  session.append('turn/start', { turn: 1 })
   const agent = { ctx, session, options: { provider: 'vision', model: 'vision' } } as Agent
   const execute = (name = 'inspect') => executeModelToolFixture(ctx, {
     signal: new AbortController().signal, callId: ToolCallId('mixed-call'), name,

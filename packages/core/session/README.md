@@ -41,7 +41,7 @@ ctx.sessions.list()              // every live session, in creation order
 
 ### Append and derive
 
-`session.append(type, data, opts?)` commits one typed event. It rejects read-only instances before reading payload fields, snapshots and freezes valid JSON, then rechecks write permission before committing and notifying observers. `session.deriveMessages()` projects the log into the `Message[]` the model sees, incrementally and cached:
+`session.append(type, data, opts?)` commits one typed event. It rejects read-only instances before reading payload fields, snapshots and freezes valid JSON, then rechecks write permission before committing and notifying observers. Turn-scoped records that the open turn cannot hold (the PTC dispatch pair) are rejected with `SessionTurnScopeError` before the log changes, rather than persisted for the V4 reader to refuse later. `session.deriveMessages()` projects the log into the `Message[]` the model sees, incrementally and cached:
 
 ```text
 session.append('user/message', { role: 'user', content: [{ type: 'text', text: 'hello' }], source: { kind: 'user' } },
@@ -118,7 +118,7 @@ The package is built on event sourcing: a `Session` is an append-only log of typ
 
 ### Append validation
 
-Every append uses the shared iterative `snapshotJsonValue()` pass, which reads, validates, and copies each nested value once, so a stateful getter cannot supply one value to validation and another to storage. Non-lossless-JSON payloads (BigInt, cycles, sparse arrays, `-0`, exotic prototypes) are rejected at the append site, before any backend flush. The append path constructs each `SessionSeq`; surface events additionally validate marker shape, cited source-event sequences, and complete shadowed-node coverage for replacements.
+Every append uses the shared iterative `snapshotJsonValue()` pass, which reads, validates, and copies each nested value once, so a stateful getter cannot supply one value to validation and another to storage. Non-lossless-JSON payloads (BigInt, cycles, sparse arrays, `-0`, exotic prototypes) are rejected at the append site, before any backend flush. The append path constructs each `SessionSeq`; surface events additionally validate marker shape, cited source-event sequences, and complete shadowed-node coverage for replacements. Turn scope is part of append validity: `tool/ptc-dispatch-start` and `tool/ptc-dispatch` are rejected with `SessionTurnScopeError` when no turn is open, and seeded logs replay their turn state so an open tail stays open for a resumed session.
 
 ### Shared recovery
 

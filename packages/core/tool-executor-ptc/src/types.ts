@@ -40,7 +40,8 @@ declare module '@deepseek-ai/dsh-session/types' {
      * call abandoned in the queue logs nothing. Log-only: `deriveMessages()`
      * ignores it; UIs use it for live per-sub-call running state and pair it
      * with `tool/ptc-dispatch` by `subCallId` (timing = the two events'
-     * `time` fields).
+     * `time` fields). Turn-scoped: `Session.append` rejects it when the owning
+     * turn already closed, and the bridge then drops the record.
      */
     'tool/ptc-dispatch-start': PtcDispatchStartEventData
     /**
@@ -55,8 +56,9 @@ declare module '@deepseek-ai/dsh-session/types' {
      * Log-only: `deriveMessages()` ignores it, so sub-calls never re-enter
      * model context; persistence and UIs get every call. Appended inside the
      * parent `run_code`'s execution (the bridge drains in-flight dispatches
-     * before returning), so its execution-enclosure relation holds by
-     * construction.
+     * before returning). Turn-scoped: when the owning turn closed while the
+     * settle was pending, the append rejects and the bridge drops the record
+     * rather than store a settle without an open turn.
      */
     'tool/ptc-dispatch': PtcDispatchEventData
   }

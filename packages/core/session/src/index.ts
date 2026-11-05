@@ -463,6 +463,48 @@ function assertPluginRecordEvent(value: unknown): asserts value is SessionEvent 
   }
 }
 
+/**
+ * Event types the writer refuses outside an open turn.
+ *
+ * The V4 reader (`packages/session/session-format-v3-to-v4/src/relationships.ts`)
+ * rejects the whole turn-scoped family outside a turn: `requireTurn` covers
+ * `request/header`, `request/context`, `tool/ptc-dispatch-start`,
+ * `tool/ptc-dispatch`, a replacement `tool/result`, and `turn/end`;
+ * `requireStep` covers `system/message`, `developer/message`,
+ * `assistant/attempt`, `assistant/message`, `tool/call`, an append
+ * `tool/result`, `step/start`, and `step/end`; `llm/retry` requires the
+ * matching open turn.
+ *
+ * This writer enforces only the PTC dispatch pair: its log-only settle append
+ * can run after `turn/end` when a `run_code` tool call is abandoned, which is
+ * the corruption source of Discussions #11971/#11981. The other types are
+ * currently appended in-turn by their production writers (agent-loop, the tool
+ * batch, llm-retry, and the tool-result pruner from `compactIfNeeded`); manual
+ * compaction, which legitimately runs between turns, appends only
+ * `compaction/*` and `user/message`, which the reader allows there. Enforcing
+ * the remaining types needs a separate audit of every append site and test
+ * fixture that opens no turn, so it stays out of this guard.
+ */
+const TURN_SCOPED_APPEND_TYPES: ReadonlySet<string> = new Set<string>([
+  'tool/ptc-dispatch-start',
+  'tool/ptc-dispatch',
+])
+
+/**
+ * Rejection for a turn-scoped event appended while the log has no open turn.
+ * The V4 reader would later refuse to load the stored session with the same
+ * message, so the append site fails instead.
+ */
+export class SessionTurnScopeError extends Error {
+  /**
+   * @param eventType - the turn-scoped event type that was rejected.
+   */
+  constructor(readonly eventType: SessionEventType) {
+    super(`session event "${eventType}" is outside an open turn`)
+    this.name = 'SessionTurnScopeError'
+  }
+}
+
 /** Module-private access to {@link Session}'s record commit, assigned once by its static block. */
 let commitPluginRecord: (session: Session, type: PluginRecordType, data: unknown) => SessionSeq
 
@@ -524,6 +566,8 @@ export function pluginRecordOf(event: SessionEvent): PluginRecord | undefined {
  */
 export class Session {
   private log: SessionEvent[] = []
+  /** Whether a `turn/start` opened a turn that no `turn/end` has closed. */
+  private openTurn = false
   /** Single incremental owner of surface acceptance and projection state. */
   private readonly surfaceManager: SurfaceManager
 
@@ -664,6 +708,10 @@ export class Session {
           throw new Error(`invalid seed event at index ${index}: ${error instanceof Error ? error.message : 'invalid surface metadata'}`)
         }
         this.log.push(mode === 'snapshot' ? deepFreeze(snapshot) : snapshot)
+        // A stored partial tail can end inside an open turn; the writer keeps
+        // that turn open so a resumed session may still log its turn-scoped
+        // events until the repair closers arrive.
+        this.trackTurn(snapshot)
       }
     }
     this.firstLiveSeq = SessionLogOffset(this.log.length)
@@ -795,7 +843,9 @@ export class Session {
    *   request-header empty-field or tool-error consistency rules, or the
    *   canonical surface contract (marker shape and eligibility, unique
    *   earlier source-event references, positional replacement validity, and complete
-   *   shadowed-node coverage). One iterative pass reads, validates, and
+   *   shadowed-node coverage), or when a turn-scoped event is appended with no
+   *   open turn ({@link SessionTurnScopeError}, naming the event type). One
+   *   iterative pass reads, validates, and
    *   copies each nested value once, so a stateful getter cannot supply one value
    *   to validation and another to storage. The event log is the durable source
    *   of truth, so a bad event fails at the append site rather than later during
@@ -834,6 +884,25 @@ export class Session {
     validateSessionEventData(event, `session event "${type}" at seq ${event.seq}`)
     this.commit(event as SessionEvent, entry)
     return event
+  }
+
+  /**
+   * Refuse a turn-scoped append when the log has no open turn.
+   * @param type - the event type about to enter the log.
+   * @throws {SessionTurnScopeError} when {@link TURN_SCOPED_APPEND_TYPES} names
+   *   `type` and no `turn/start` is open; the log is unchanged.
+   */
+  private assertOpenTurn(type: SessionEventType): void {
+    if (!this.openTurn && TURN_SCOPED_APPEND_TYPES.has(type)) throw new SessionTurnScopeError(type)
+  }
+
+  /**
+   * Advance the open-turn cursor with one accepted event.
+   * @param event - the event entering the log.
+   */
+  private trackTurn(event: SessionEvent): void {
+    if (event.type === 'turn/start') this.openTurn = true
+    else if (event.type === 'turn/end') this.openTurn = false
   }
 
   static {
@@ -891,6 +960,7 @@ export class Session {
    */
   private commit(event: SessionEvent, entry: SessionEntry | undefined): void {
     this.surfaceManager.validateNext(event)
+    this.assertOpenTurn(event.type)
 
     if (entry !== undefined) entry.appending = true
     try {
@@ -899,6 +969,7 @@ export class Session {
         ? undefined
         : collectSessionCallbacks(entry.emitCtx, [entry.carrier, 'session/event', ...callbackArgs])
       this.log.push(event)
+      this.trackTurn(event)
       this.eventsSnapshot = undefined
       if (entry !== undefined && callbacks !== undefined) {
         invokeContainedSessionObservers(entry.emitCtx, 'session/event', entry.id, callbackArgs, callbacks)

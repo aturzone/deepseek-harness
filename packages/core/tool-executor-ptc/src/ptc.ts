@@ -10,6 +10,7 @@ import type { PtcDispatchLog } from './runtime-types.ts'
 import { symbols, type Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { createUserMessage, HarnessError } from '@deepseek-ai/dsh-llm'
+import { SessionTurnScopeError } from '@deepseek-ai/dsh-session'
 
 import type { ContentBlock, ToolCallId, ToolSchema } from '@deepseek-ai/dsh-llm'
 import type { PtcBindingFunction, PtcRunResult, PtcRunSandbox, PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
@@ -493,8 +494,8 @@ export function createRunCodeTool(
           // entries, awaits the live pool, and drains the ordered commit lane —
           // including a commit already in progress when the program returned.
           await drive()
-          // Every settle event is appended inside the open run_code turn
-          // (tasks self-remove on settlement).
+          // Settle appends are tracked side work; a turn that closed first makes
+          // their append reject, and that record is dropped inside the task.
           while (logWork.size > 0) await Promise.allSettled([...logWork])
         }
 
@@ -534,19 +535,27 @@ export function createRunCodeTool(
             let parked:
               | { kind: 'post-result' | 'final-result'; exec: ToolRunContext; result: ToolExecutionResult }
               | undefined
+            /**
+             * Whether this sub-call's `tool/ptc-dispatch-start` entered the log.
+             * A settle without its start is not recordable: the reader pairs
+             * every settle with a unique start.
+             */
+            let startLogged = false
             const settle = (result: ToolExecutionResult): void => {
               // The program gets its value NOW: the log-content listener (for
               // example, a spill backend) must never delay the binding or occupy
               // a dispatch slot. The event append is tracked side work; the run's
-              // settlement drains logWork so every settle event is still appended
-              // inside the open turn (shapeDispatchLog is contained, so this
-              // chain cannot reject).
+              // settlement drains logWork. A turn that closed before the append
+              // rejects it as out of scope, and that log-only record is dropped.
               resolve(result.isError
                 ? { isError: true, message: result.error.message }
                 : { isError: false, value: result.value })
               const agent = exec.agent
               if (agent === undefined) return
               const task: Promise<void> = (async () => {
+                // A dropped start means this dispatch has no recordable
+                // lifecycle; appending its settle alone would corrupt the log.
+                if (!startLogged) return
                 // The listener may replace the durable copy with a preview and
                 // locator; the program's value and model-visible result are
                 // untouched.
@@ -557,20 +566,28 @@ export function createRunCodeTool(
                   // the log stays detached.
                   content: result.content,
                 })
-                agent.session.append('tool/ptc-dispatch', {
-                  rootCallId: exec.rootCallId,
-                  parentCallId: exec.callId,
-                  subCallId,
-                  name,
-                  // The SIBLING parse of the dispatched value: byte-identical JSON,
-                  // but a separate object — a tool mutating its args cannot desync
-                  // this record from what it actually received.
-                  arguments: normalized.logged,
-                  isError: result.isError,
-                  ...result.error?.info === undefined ? {} : { error: result.error.info },
-                  content: logged,
-                  ...result.meta === undefined ? {} : { meta: result.meta },
-                })
+                try {
+                  agent.session.append('tool/ptc-dispatch', {
+                    rootCallId: exec.rootCallId,
+                    parentCallId: exec.callId,
+                    subCallId,
+                    name,
+                    // The SIBLING parse of the dispatched value: byte-identical JSON,
+                    // but a separate object — a tool mutating its args cannot desync
+                    // this record from what it actually received.
+                    arguments: normalized.logged,
+                    isError: result.isError,
+                    ...result.error?.info === undefined ? {} : { error: result.error.info },
+                    content: logged,
+                    ...result.meta === undefined ? {} : { meta: result.meta },
+                  })
+                } catch (error: unknown) {
+                  if (!(error instanceof SessionTurnScopeError)) throw error
+                  // The owning turn closed while this settle append was pending
+                  // (an abandoned tool call). The record is log-only, so drop it
+                  // rather than leave a session the reader cannot load.
+                  logger.warn(`tools: dropped tool/ptc-dispatch for ${name}: ${error.message}`)
+                }
               })().finally(() => { logWork.delete(task) })
               logWork.add(task)
             }
@@ -584,13 +601,26 @@ export function createRunCodeTool(
                 reject(new Error(`run_code run is over (${String(runController.signal.reason)}); ${name} tool call abandoned`))
               },
               async start(): Promise<void> {
-                exec.agent?.session.append('tool/ptc-dispatch-start', {
-                  rootCallId: exec.rootCallId,
-                  parentCallId: exec.callId,
-                  subCallId,
-                  name,
-                  arguments: normalized.logged,
-                })
+                try {
+                  if (exec.agent !== undefined) {
+                    exec.agent.session.append('tool/ptc-dispatch-start', {
+                      rootCallId: exec.rootCallId,
+                      parentCallId: exec.callId,
+                      subCallId,
+                      name,
+                      arguments: normalized.logged,
+                    })
+                    startLogged = true
+                  }
+                } catch (error: unknown) {
+                  if (!(error instanceof SessionTurnScopeError)) throw error
+                  // The owning turn closed before this queued call started (its
+                  // tool call was abandoned). The dispatch record is log-only, so
+                  // drop it: appending outside the turn would make the stored
+                  // session unreadable. `startLogged` stays false, so the settle
+                  // append is skipped too.
+                  logger.warn(`tools: dropped tool/ptc-dispatch-start for ${name}: ${error.message}`)
+                }
                 // Ordered prepare runs INSIDE the driver lane: the next entry's
                 // pre-execute waits for this resolution, as under the native
                 // scheduler. Only the launched body below overlaps.

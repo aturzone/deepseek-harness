@@ -55,6 +55,8 @@ async function mountRuntime(ctx: Context, config: NodeRuntimeConfig = {}): Promi
 
 function observedAgent(ctx: Context, id: string, observe: (type: string, data: unknown) => void) {
   const session = ctx.sessions.create(SessionId(id), { meta: { cwd: process.cwd() } })
+  // PTC dispatch records are turn-scoped, so the fixture's run_code needs an open turn.
+  session.append('turn/start', { turn: 1 })
   ctx.on('session/event', (owner, event) => { if (owner === session) observe(event.type, event.data) })
   return { ctx, session }
 }
