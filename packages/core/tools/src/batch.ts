@@ -15,6 +15,7 @@ import { ToolBatchExecutionError } from './executor.ts'
 import { TOOL_ABORTED_BEFORE_DISPATCH } from './contracts.ts'
 import type { ToolBatchInput, ToolBatchResult, ToolCallResult } from './executor.ts'
 import { createToolResultMessage, type ToolCallBlock } from '@deepseek-ai/dsh-llm'
+import { wellFormedToolResult } from '@deepseek-ai/dsh-session'
 import type { SessionSeq, UserMessage } from '@deepseek-ai/dsh-session'
 import type { ToolExecutionInput, ToolExecutionMode, ToolExecutionResult, ToolRunContext } from './contracts.ts'
 import type { ScheduledToolDispatch, ToolExecutionPipeline } from './pipeline.ts'
@@ -253,12 +254,12 @@ class BatchSettlement {
     if (this.input.log !== undefined) {
       const { agent, log: { turn, step } } = this.input
       // oxlint-disable-next-line typescript/no-non-null-assertion -- ToolBatchInput requires agent whenever log is provided
-      agent!.session.append('tool/result', {
+      agent!.session.append('tool/result', wellFormedToolResult({
         turn, step,
         message: createToolResultMessage({ callId: block.id, content: result.content, isError: result.isError }),
         ...result.error?.info ? { error: result.error.info } : {},
         ...result.meta !== undefined ? { meta: result.meta } : {},
-      }, {
+      }), {
         surfaceOp: 'append',
         // oxlint-disable-next-line typescript/no-non-null-assertion -- start records a call seq whenever this batch logs results
         sourceEventSeqs: [callSeq!],
