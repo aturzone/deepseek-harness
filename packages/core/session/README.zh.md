@@ -43,7 +43,7 @@ ctx.sessions.list()              // every live session, in creation order
 
 ### 追加与派生
 
-`session.append(type, data, opts?)` 提交一个类型化事件。它在读取载荷字段前拒绝只读实例，为有效 JSON 创建快照并冻结，再次检查写入权限后提交并通知观察者。`session.deriveMessages()` 把日志投影为模型看到的 `Message[]`，采用增量且有缓存的方式：
+`session.append(type, data, opts?)` 提交一个类型化事件。它在读取载荷字段前拒绝只读实例，为有效 JSON 创建快照并冻结，再次检查写入权限后提交并通知观察者。打开中的 turn 容纳不下的 turn 作用域记录（PTC 派发事件对）会在日志变更前以 `SessionTurnScopeError` 拒绝，而不是先持久化、再让 V4 读取器在加载时拒绝。`session.deriveMessages()` 把日志投影为模型看到的 `Message[]`，采用增量且有缓存的方式：
 
 ```text
 session.append('user/message', { role: 'user', content: [{ type: 'text', text: 'hello' }], source: { kind: 'user' } },
@@ -122,7 +122,7 @@ session.deriveMessages()         // the derived model history
 
 ### 追加校验
 
-每次追加都会使用共享的迭代式 `snapshotJsonValue()` 流程，对每个嵌套值只读取、校验并复制一次，因此有状态的 getter 无法给校验提供一个值、给存储提供另一个值。非无损 JSON 载荷（BigInt、循环、稀疏数组、`-0`、特殊原型）会在追加位置被拒绝，先于任何后端刷新。追加路径会构造每个 `SessionSeq`；surface 事件还会校验标记形态、被引用的源事件序号，以及替换的完整遮蔽节点覆盖。
+每次追加都会使用共享的迭代式 `snapshotJsonValue()` 流程，对每个嵌套值只读取、校验并复制一次，因此有状态的 getter 无法给校验提供一个值、给存储提供另一个值。非无损 JSON 载荷（BigInt、循环、稀疏数组、`-0`、特殊原型）会在追加位置被拒绝，先于任何后端刷新。追加路径会构造每个 `SessionSeq`；surface 事件还会校验标记形态、被引用的源事件序号，以及替换的完整遮蔽节点覆盖。turn 作用域也是追加校验的一部分：没有打开的 turn 时，`tool/ptc-dispatch-start` 与 `tool/ptc-dispatch` 会以 `SessionTurnScopeError` 被拒绝；种子日志会重放其 turn 状态，因此打开的尾部在会话恢复后仍保持打开。
 
 ### 共享恢复逻辑
 

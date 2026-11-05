@@ -188,6 +188,7 @@ it('logs detached frozen nested metadata without changing the binding value or l
     }))
     ctx.on('tools/ptc-dispatch-log', async () => [{ type: 'text', text: 'redacted durable preview' }])
     const session = Session.create(brandString<SessionId>('ptc-location'))
+    session.append('turn/start', { turn: 1 })
     const agent = { ctx, session } as Agent
     runtime.behavior = async (request) => {
       const value = await request.bindings[0]!.functions.location!({})
@@ -215,7 +216,9 @@ describe('mode-aware wire contribution', () => {
   it('shares conditional admission with SDK bindings and rejects a replaced cached binding', async () => {
     const { ctx, runtime, systemPrompt } = await setup({ mode: 'ptc' })
     try {
-      const agent = { ctx, session: Session.create(brandString<SessionId>('conditional-ptc')) } as Agent
+      const session = Session.create(brandString<SessionId>('conditional-ptc'))
+      session.append('turn/start', { turn: 1 })
+      const agent = { ctx, session } as Agent
       let active = false
       const execute = vi.fn(async () => 'done')
       const definition = defineTool({
@@ -1102,6 +1105,54 @@ describe('the sub-dispatch scheduler (native concurrency contract)', () => {
     const settles = events.filter(event => event.type === 'tool/ptc-dispatch')
     expect(settles).toHaveLength(1)
     expect(settles[0]?.data).toMatchObject({ name: 'safe_read', isError: true })
+  })
+
+  it('drops a queued dispatch whose turn closed before it started', async () => {
+    const { ctx, runtime } = await setup({ mode: 'ptc' })
+    registerEcho(ctx)
+    const session = Session.create(SessionId('ptc-closed-before-start'))
+    session.append('turn/start', { turn: 1 })
+    const agent = { ctx, session } as Agent
+    runtime.behavior = async (request) => {
+      // The owning turn closes while the run is in flight (agent-loop finally).
+      session.append('turn/end', { turn: 1, reason: { kind: 'aborted', reason: { kind: 'user' } } })
+      const value = await request.bindings[0]!.functions.echo!({ value: 'late' })
+      return { logs: [], value }
+    }
+
+    const result = await runCode(ctx, 'return await tools.echo({ value: "late" })', { agent })
+
+    expect(result.isError).toBe(false)
+    // The late start and its settle were dropped instead of being written
+    // outside the turn, which the reader rejects when loading the session.
+    expect(session.snapshotEvents().filter(event => event.type.startsWith('tool/ptc-dispatch'))).toHaveLength(0)
+    const restored = Session.create(session.id, structuredClone([...session.snapshotEvents()]), session.header)
+    expect(restored.snapshotEvents().slice(0, -1)).toEqual(session.snapshotEvents())
+  })
+
+  it('drops a settle whose turn closed while its log task was pending', async () => {
+    const { ctx, runtime } = await setup({ mode: 'ptc' })
+    registerEcho(ctx)
+    const session = Session.create(SessionId('ptc-closed-before-settle'))
+    session.append('turn/start', { turn: 1 })
+    const agent = { ctx, session } as Agent
+    runtime.behavior = async (request) => {
+      const value = await request.bindings[0]!.functions.echo!({ value: 'early' })
+      // The turn closes after the sub-call resolved but before its tracked
+      // settle append runs.
+      session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+      return { logs: [], value }
+    }
+
+    const result = await runCode(ctx, 'return await tools.echo({ value: "early" })', { agent })
+
+    expect(result.isError).toBe(false)
+    const events = session.snapshotEvents()
+    expect(events.filter(event => event.type === 'tool/ptc-dispatch-start')).toHaveLength(1)
+    expect(events.filter(event => event.type === 'tool/ptc-dispatch')).toHaveLength(0)
+    expect(events.at(-1)?.type).toBe('turn/end')
+    const restored = Session.create(session.id, structuredClone([...events]), session.header)
+    expect(restored.snapshotEvents().slice(0, -1)).toEqual(events)
   })
 
   it('post-execute and context commitment stay in submission order under out-of-order completion', async () => {
@@ -2165,6 +2216,7 @@ describe('the run_code dispatch bridge', () => {
       },
     }))
     const session = Session.create(brandString<SessionId>('deep-code-arguments'))
+    session.append('turn/start', { turn: 1 })
     const agent = { ctx, session } as Agent
     runtime.behavior = async (request) => {
       let nested: JsonValue = 'leaf'
@@ -2354,6 +2406,7 @@ describe('the run_code dispatch bridge', () => {
 
   it('a tool/ptc-dispatch event never derives a model message', () => {
     const session = Session.create(brandString<SessionId>('ptc-derive'))
+    session.append('turn/start', { turn: 1 })
     session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'hi' }], source: { kind: 'user' },
     }), { surfaceOp: 'append' })
@@ -3047,6 +3100,7 @@ it.each([
     return printed(await request.bindings[0]!.functions.echo!({}))
   }
   const agent = { ctx, id: brandString<SessionId>('unloading-ptc'), session: Session.create(brandString<SessionId>('unloading-ptc')) } as Agent
+  agent.session.append('turn/start', { turn: 1 })
   const input = {
     calls: [{ type: 'tool-call' as const, id: brandString<ToolCallId>('unloading-program'), name: RUN_CODE_NAME,
       arguments: JSON.stringify({ code: 'return await tools.echo({})', description: 'Invoke retained tool after unload' }) }],

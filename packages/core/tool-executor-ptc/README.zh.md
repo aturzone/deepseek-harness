@@ -42,7 +42,7 @@ kind: "package-reference"
 
 本包将 `ctx.ptcRuntime` 和 `ctx.systemPrompt` 声明为必需注入；带 Agent 的程序要求 `ctx.workingDirectory`。执行器在运行时可用后才激活，并在运行时卸载时撤回。启用 PTC 执行器但未提供运行时会阻止应用启动。已撤回的 PTC 选择不会回退到原生执行。
 
-共享分派事件与 `ptc-mode` 消息来源声明位于 `@deepseek-ai/dsh-tool-executor-ptc/types`；Client 代码通过 `@deepseek-ai/dsh-tool-executor-ptc/client` 导入同一组声明。两个入口都不引入 Host 服务声明。Host 策略扩展通过包主入口的 `import type` 获取 `PtcDispatchLog` 与 `tools/ptc-dispatch-log`，无需挂载执行器。
+共享分派事件与 `ptc-mode` 消息来源声明位于 `@deepseek-ai/dsh-tool-executor-ptc/types`；Client 代码通过 `@deepseek-ai/dsh-tool-executor-ptc/client` 导入同一组声明。两个入口都不引入 Host 服务声明。Host 策略扩展通过包主入口的 `import type` 获取 `PtcDispatchLog` 与 `tools/ptc-dispatch-log`，无需挂载执行器。这些分派记录是仅日志记录且属于 turn 作用域：当所属 turn 在排队子调用开始或结算之前关闭时，桥接层会丢弃该记录并给出警告，而不会在 turn 之外追加。
 
 `/run-code` 入口导出 `createRunCodeTool`，供插件在原生工具旁注册具名程序工具。调用方显式传入运行时及完整的私有 `ToolDefinition` 列表，再将返回的定义注册到所属作用域。即使 Agent 能直接调用其他原生工具，程序也只能调用该列表中的工具；私有定义不进入工具注册表。嵌套调用保留正常审批、guard、派发日志、截图、延后上下文和轮次结束行为。`RunCodeConfig` 提供与本执行器相同且经过校验的调用额度与并发设置。
 
