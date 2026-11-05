@@ -1,4 +1,5 @@
 /** Agent-facing read-only listing of configured plugin market indexes. */
+import { truncateWithoutSplittingSurrogatePair } from '@deepseek-ai/dsh-output-retention'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import type { Context } from '@deepseek-ai/cordis'
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
@@ -23,7 +24,8 @@ const MAX_TEXT = 300
 /** English text of a market field, truncated with an ellipsis so one entry cannot dominate the result. */
 function english(text: LocalizedText | undefined): string | undefined {
   const value = typeof text === 'object' ? text.en : text
-  return value === undefined || value.length <= MAX_TEXT ? value : `${value.slice(0, MAX_TEXT)}…`
+  // Market-supplied text may end in an emoji at the cut; keep the model-facing result well-formed.
+  return value === undefined || value.length <= MAX_TEXT ? value : `${truncateWithoutSplittingSurrogatePair(value, MAX_TEXT)}…`
 }
 
 /** One version as the model sees it: when it was published, whether it runs here, and how to install it. */
