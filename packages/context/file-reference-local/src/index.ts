@@ -5,7 +5,7 @@
  */
 
 import type {} from '@deepseek-ai/dsh-working-directory'
-import { Context } from '@deepseek-ai/cordis'
+import { Context, FiberState } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import FileReferenceService, {
@@ -56,9 +56,14 @@ export class LocalFileReferenceService extends FileReferenceService {
     }
     validateConfig(this.config)
 
-    const installPrompt = (agent: Agent): ReturnType<Context['inject']> => {
+    const installPrompt = (agent: Agent): ReturnType<Context['inject']> | undefined => {
       const existing = this.promptFibers.get(agent)
       if (existing !== undefined) return existing
+      // A registered agent can still be tearing down: its scope fiber rejects new
+      // effects with INACTIVE_EFFECT while the registry entry is not removed yet.
+      // Skipping it keeps the provider serving every live agent.
+      const scopeFiber = agent.ctx.fiber
+      if (scopeFiber.uid === null || scopeFiber.state === FiberState.UNLOADING) return undefined
       const fiber = agent.ctx.inject(['systemPrompt', 'tools'], (scope) => {
         scope.systemPrompt.section({
           name: 'context:file-reference',
