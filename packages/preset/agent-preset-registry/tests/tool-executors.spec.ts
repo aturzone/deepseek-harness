@@ -135,6 +135,8 @@ it.each([true, false])('loads cordis.yml executor presets with runtime availabil
     return
   }
   const ptc = await agentOn(ctx, 'ptc-package', 'ptc')
+  // PTC dispatch records are turn-scoped, so this direct run_code fixture needs an open turn.
+  ptc.session.append('turn/start', { turn: 1 })
   expect((await ctx.systemPrompt.assemble({ scope: ptc })).tools.map(tool => tool.name)).toEqual(['run_code'])
   const signal = new AbortController().signal
   expect(await executeModelToolFixture(ctx, {

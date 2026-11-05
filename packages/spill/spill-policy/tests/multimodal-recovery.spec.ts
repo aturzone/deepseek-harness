@@ -77,6 +77,8 @@ async function setup(mode: 'native' | 'ptc' = 'native', maxInlineTokens = CAP) {
   ctx.llm.registerAdapter(['vision'], new VisionRoute())
   await ctx.plugin(SpillPolicy, { maxInlineTokens })
   const session = ctx.sessions.create(brandString<SessionId>('recovery'), { meta: { cwd: root } })
+  // PTC dispatch records are turn-scoped, so the fixture's run_code needs an open turn.
+  session.append('turn/start', { turn: 1 })
   const agent = { session, options: { provider: 'vision', model: MODEL }, ctx } as Agent
   let ordinal = 0
   const execute = (name: string, args: JsonValue = {}) => executeModelToolFixture(ctx, {

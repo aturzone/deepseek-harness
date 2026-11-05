@@ -613,6 +613,8 @@ describe('current working directory', () => {
       })
       const agent = handle.agent
       const session = agent.session
+      // PTC dispatch records are turn-scoped, so this direct run_code fixture needs an open turn.
+      session.append('turn/start', { turn: 1 })
       await ctx.workingDirectory.set(agent, next)
       const current = ctx.workingDirectory.get(session)
       expect(ctx.sandboxPolicy.resolve({ session }).workspaceRoot).toBe(current)

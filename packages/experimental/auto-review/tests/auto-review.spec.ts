@@ -301,6 +301,8 @@ describe('native review request', () => {
     const secondHistoricalInnerId = brandString<ToolCallId>('outer-call:code:1')
     const currentCallId = brandString<ToolCallId>('current-call')
     const unstartedCallId = brandString<ToolCallId>('unstarted-call')
+    // PTC dispatch records are turn-scoped; this fixture logs historical ones directly.
+    session.append('turn/start', { turn: 1 })
     const loggedSchema: ToolSchema = {
       name: 'probe',
       description: 'logged probe description',
@@ -1178,6 +1180,8 @@ describe('PTC and bypass semantics', () => {
     const probe = registerProbe(ctx)
     const { session, agent } = autoSession(ctx, 'ptc-inner')
     setApprovalPolicy(session, 'never')
+    // PTC dispatch records are turn-scoped; this fixture logs the inner start directly.
+    session.append('turn/start', { turn: 1 })
     appendHeader(session)
     appendUser(session, 'inspect only', { kind: 'user' })
     const outerCallId = brandString<ToolCallId>('outer')
@@ -1933,6 +1937,8 @@ describe('logged-fact failures', () => {
     for (const { id, prepare } of cases) {
       const { session, agent } = autoSession(ctx, id)
       const callId = brandString<ToolCallId>(`${id}-call`)
+      // PTC dispatch records are turn-scoped; this fixture logs some directly.
+      session.append('turn/start', { turn: 1 })
       prepare(session, callId)
       const result = await executeToolFixture(ctx, {
         signal: new AbortController().signal,
@@ -2052,6 +2058,8 @@ describe('logged-fact failures', () => {
 
     for (const item of cases) {
       const { session, agent } = autoSession(ctx, `ptc-${item.id}`)
+      // PTC dispatch records are turn-scoped; this fixture logs the inner start directly.
+      session.append('turn/start', { turn: 1 })
       appendHeader(session)
       const outer = brandString<ToolCallId>(`${item.id}-outer`)
       const inner = brandString<ToolCallId>(`${item.id}-inner`)
