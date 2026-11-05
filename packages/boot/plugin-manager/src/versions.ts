@@ -63,7 +63,12 @@ export function newerVersions(answer: unknown, installed: string): PublishedVers
       // A candidate published before the installed build is from an older line, not an update.
       return !Number.isFinite(publishedAt) || publishedAt >= installedAt
     })
-    .sort((left, right) => (left === latest ? -1 : right === latest ? 1 : semver.rcompare(left, right)))
+    .sort(semver.rcompare)
+  // The tagged latest is the update the UI offers first, even when other newer versions sort above it.
+  if (latest !== undefined) {
+    const index = newer.indexOf(latest)
+    if (index > 0) newer.unshift(...newer.splice(index, 1))
+  }
   return newer
     .map((version) => {
       const published = time[version]
