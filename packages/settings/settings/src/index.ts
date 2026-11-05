@@ -9,7 +9,7 @@ import { interpolate, type Entry } from '@deepseek-ai/cordis-plugin-loader'
 import type {} from '@deepseek-ai/dsh-config-editor'
 import type {} from '@deepseek-ai/dsh-app-boot'
 import { redactSecrets, type RedactedSecret } from './redact.ts'
-import { isVolatilePath, plainConfig, projectForm, volatileForm } from './schema.ts'
+import { isSchemasterySchema, isVolatilePath, plainConfig, projectForm, volatileForm } from './schema.ts'
 import type { SettingsNamespace } from './types.ts'
 
 export { redactSecrets } from './redact.ts'
@@ -425,7 +425,7 @@ export class SettingsForms extends Service {
 
   private schema(entry: Entry): z | undefined {
     const schema = entry.fiber?.runtime?.Config
-    return schema !== undefined && 'toJSON' in schema ? schema as z : undefined
+    return isSchemasterySchema(schema) ? schema : undefined
   }
 }
 
