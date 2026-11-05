@@ -5,6 +5,7 @@
  * signal. A provider timeout remains a backstop for direct service callers.
  */
 
+import { truncateWithoutSplittingSurrogatePair } from '@deepseek-ai/dsh-output-retention'
 import type { Context } from '@deepseek-ai/cordis'
 import TurndownService from 'turndown'
 import { gfm } from '@joplin/turndown-plugin-gfm'
@@ -240,7 +241,7 @@ interface RenderedBody {
  *   raw active markup never reaches the model-facing result.
  */
 function renderBody(body: WebFetchBody, maxInputChars: number): RenderedBody {
-  const content = body.content.slice(0, maxInputChars)
+  const content = truncateWithoutSplittingSurrogatePair(body.content, maxInputChars)
   const sourceTruncated = content.length !== body.content.length
   switch (body.kind) {
     case 'html':
@@ -332,8 +333,8 @@ function computeFetchOutput(result: WebFetchResult, maxOutputChars: number): Ren
   const truncated = result.truncated || rendered.sourceTruncated || prefix.length > maxOutputChars
   const full = `${prefix}${truncated ? TRUNCATION_FOOTER : ''}`
   if (full.length <= maxOutputChars) return { text: full, truncated }
-  if (maxOutputChars < TRUNCATION_FOOTER.length) return { text: full.slice(0, maxOutputChars), truncated }
-  return { text: `${prefix.slice(0, maxOutputChars - TRUNCATION_FOOTER.length)}${TRUNCATION_FOOTER}`, truncated }
+  if (maxOutputChars < TRUNCATION_FOOTER.length) return { text: truncateWithoutSplittingSurrogatePair(full, maxOutputChars), truncated }
+  return { text: `${truncateWithoutSplittingSurrogatePair(prefix, maxOutputChars - TRUNCATION_FOOTER.length)}${TRUNCATION_FOOTER}`, truncated }
 }
 
 /**

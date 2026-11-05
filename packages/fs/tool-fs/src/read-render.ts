@@ -5,6 +5,7 @@
  * @module @deepseek-ai/dsh-tool-fs/read-render
  */
 
+import { truncateWithoutSplittingSurrogatePair } from '@deepseek-ai/dsh-output-retention'
 import { FsError } from '@deepseek-ai/dsh-fs'
 
 /** Default maximum characters returned for a single line (the `readMaxLineLength` config). */
@@ -67,7 +68,11 @@ function newAccumulator(): WindowAccumulator {
 }
 
 function truncateLine(line: string, maxLineLength: number): string {
-  return line.length > maxLineLength ? `${line.substring(0, maxLineLength)}... (line truncated to ${maxLineLength} chars)` : line
+  // A raw UTF-16 cut can leave a lone high surrogate, which the API rejects on every later
+  // request; the shared helper drops the half pair instead.
+  return line.length > maxLineLength
+    ? `${truncateWithoutSplittingSurrogatePair(line, maxLineLength)}... (line truncated to ${maxLineLength} chars)`
+    : line
 }
 
 function lineByteSize(line: string, currentLineCount: number): number {

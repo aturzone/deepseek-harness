@@ -94,9 +94,12 @@ describe('buildWindow', () => {
       expect(result.lines).toEqual([{ number: 1, text: 'abcde' }, { number: 2, text: 'next' }])
     })
 
-    it('keeps the lone high surrogate left by truncating inside a surrogate pair', async () => {
+    it('drops the half surrogate pair left by truncating inside it', async () => {
+      // The emoji's high surrogate sits at index 4; a 5-code-unit cut would keep it without its low half.
       const result = await buildWindow(whole('abcd😀z'), { offset: 1, limit: 10, maxLineLength: 5, maxBytes: READ_MAX_BYTES }, 'f')
-      expect(result.lines[0]?.text).toBe('abcd\uD83D... (line truncated to 5 chars)')
+      const text = result.lines[0]?.text ?? ''
+      expect(text).toBe('abcd... (line truncated to 5 chars)')
+      expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(text)).toBe(false)
     })
 
     it('caps output at a custom maxBytes', async () => {
