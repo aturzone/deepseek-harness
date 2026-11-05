@@ -68,7 +68,8 @@
     "hosted-git-info": "^9.0.3",
     "minisearch": "^7.2.0",
     "semver": "^7.8.5",
-    "zod": "4.6.6"
+    "zod": "4.6.6",
+    "@deepseek-ai/dsh-output-retention": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
