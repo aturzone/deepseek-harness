@@ -367,6 +367,16 @@ export class PluginManager extends TypertRemoteService {
   private readonly installs = new Map<PluginInstallRequestId, InstallControl>()
   private readonly detail: BundleDetailOptions
 
+  /**
+   * Version plugin requirements are judged against: the launcher fact published in the
+   * profile context, else this installation's app-boot version. A nested plugin-manager
+   * copy would otherwise judge against its own package version (Discussion #10458).
+   * @returns the running dsh version for compatibility decisions.
+   */
+  private runtimeVersion(): string {
+    return this.profile.runtimeVersion ?? getDshRuntimeVersion()
+  }
+
   constructor(ctx: Context, config: Config) {
     super(ctx, 'pluginManager')
     this.ownerEntryId = ctx.fiber.entry?.id
@@ -574,7 +584,7 @@ export class PluginManager extends TypertRemoteService {
           ? undefined
           : 'dsh.bundle.listedByDefault must be a boolean'
         if (typeof listedByDefault === 'boolean') listing = { listedByDefault }
-        const compatibility = evaluatePluginCompatibility(info, exemptions)
+        const compatibility = evaluatePluginCompatibility(info, exemptions, this.runtimeVersion())
         if (compatibility !== undefined && !compatibility.exempted) throw new ManagementFailure('incompatible-version', [incompatiblePlugin(compatibility)])
         const dir = resolveBundleDir('dsh', name, this.profile.installAnchor, this.profile.dir)
         const read: BundleInfo['meta'] = offered?.meta ?? readPluginMeta(info.name ?? name, pathToFileURL(join(dir, 'package.json')).href)
@@ -703,7 +713,7 @@ export class PluginManager extends TypertRemoteService {
       if (answer.status === 'refused') return answer
       const facts = versionFacts(answer.answer, name, published.version)
       let compatibility
-      try { compatibility = evaluatePluginCompatibility(facts.manifest, exemptions) }
+      try { compatibility = evaluatePluginCompatibility(facts.manifest, exemptions, this.runtimeVersion()) }
       catch (error) { return { status: 'refused' as const, problem: 'unknown' as const, reason: messageOf(error), attempts: answer.attempts } }
       const version: PluginVersion = {
         ...published, bundle: facts.bundle, ...facts.deprecated === undefined ? {} : { deprecated: facts.deprecated },
@@ -868,7 +878,11 @@ export class PluginManager extends TypertRemoteService {
     const facts = versionFacts(checked.answer, name, version)
     if (!facts.bundle) return { code: 'not-bundle' }
     let compatibility
-    try { compatibility = evaluatePluginCompatibility(facts.manifest, readProfileVersionExemptions(this.profile.dir)) }
+    try {
+      compatibility = evaluatePluginCompatibility(
+        facts.manifest, readProfileVersionExemptions(this.profile.dir), this.runtimeVersion(),
+      )
+    }
     catch (error) { return { code: 'operation-error', diagnostic: messageOf(error) } }
     if (compatibility !== undefined && !compatibility.exempted) return { code: 'incompatible-version', incompatible: [incompatiblePlugin(compatibility)] }
     return { spec, registry: checked.registry, saveExact: true }
@@ -1091,7 +1105,7 @@ export class PluginManager extends TypertRemoteService {
         const dir = resolveBundleDir('dsh', name, this.profile.installAnchor, this.profile.dir)
         const manifest = bundleManifest(name, this.profile.dir, this.profile.installAnchor)
         if (manifest?.dsh?.bundle === undefined) throw new ManagementFailure('not-bundle')
-        const compatibility = evaluatePluginCompatibility(manifest, readProfileVersionExemptions(this.profile.dir))
+        const compatibility = evaluatePluginCompatibility(manifest, readProfileVersionExemptions(this.profile.dir), this.runtimeVersion())
         if (compatibility !== undefined && !compatibility.exempted) throw new ManagementFailure('incompatible-version', [incompatiblePlugin(compatibility)])
         for (const file of bundlePatchPaths(dir, manifest.dsh.bundle)) loadOverlayPatches('dsh', file)
         version = manifest.version
@@ -1283,7 +1297,7 @@ export class PluginManager extends TypertRemoteService {
       if (metadata === undefined) throw new ManagementFailure('not-bundle')
       if (enabled) {
         assertBundlePlatform(metadata.dsh?.bundle?.platforms, process.platform)
-        const compatibility = evaluatePluginCompatibility(metadata, readProfileVersionExemptions(this.profile.dir))
+        const compatibility = evaluatePluginCompatibility(metadata, readProfileVersionExemptions(this.profile.dir), this.runtimeVersion())
         if (compatibility !== undefined && !compatibility.exempted) throw new ManagementFailure('incompatible-version', [incompatiblePlugin(compatibility)])
         this.bundleRows(name)
       }
