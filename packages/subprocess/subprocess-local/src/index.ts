@@ -9,7 +9,7 @@
  */
 
 import { constants } from 'node:fs'
-import { access, stat } from 'node:fs/promises'
+import { access, lstat, stat } from 'node:fs/promises'
 import { userInfo } from 'node:os'
 import { delimiter, extname, isAbsolute, resolve } from 'node:path'
 import type { Duplex } from 'node:stream'
@@ -74,6 +74,35 @@ function loadNodePty(): typeof NodePty {
  * POSIX paths stage TERM before KILL; Windows paths terminate immediately.
  * JavaScript-observable host exit also performs synchronous final termination.
  */
+/**
+ * Whether a failed `stat()` executable probe still names a launchable Windows
+ * App Execution Alias. Microsoft Store installs expose shells such as
+ * `%LOCALAPPDATA%\Microsoft\WindowsApps\pwsh.exe` as reparse points: `stat()`
+ * follows the link and hits the target ACL (EACCES or EPERM), while
+ * `CreateProcess` launches the alias. `lstat()` opens the entry itself and
+ * reports the alias as a symlink on current Node releases and as a plain file
+ * on older ones; a missing or unreadable entry is not accepted.
+ * @param candidate - Absolute candidate path whose `stat()` probe failed.
+ * @param error - The probe failure to classify.
+ * @param platform - Platform to decide for; defaults to the process platform.
+ * @returns True when the candidate should be accepted despite the failed probe.
+ */
+export async function isWindowsAppExecutionAlias(
+  candidate: string,
+  error: unknown,
+  platform: NodeJS.Platform = process.platform,
+): Promise<boolean> {
+  if (platform !== 'win32') return false
+  const code = (error as NodeJS.ErrnoException).code
+  if (code !== 'EACCES' && code !== 'EPERM') return false
+  try {
+    const entry = await lstat(candidate)
+    return entry.isFile() || entry.isSymbolicLink()
+  } catch {
+    return false
+  }
+}
+
 export class LocalSubprocessRuntime extends SubprocessRuntime {
   /** Live handles retained for normal disposal and synchronous host-exit finalization. */
   private live = new Set<LocalSubprocessHandle>()
@@ -188,7 +217,13 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
         await access(candidate, constants.X_OK)
         signal?.throwIfAborted()
         return candidate
-      } catch {
+      } catch (error: unknown) {
+        // A Windows App Execution Alias still launches even though following its
+        // reparse point to the target ACL makes stat() fail with EACCES.
+        if (await isWindowsAppExecutionAlias(candidate, error)) {
+          signal?.throwIfAborted()
+          return candidate
+        }
         // Try the next PATH candidate; the final miss receives one stable error.
       }
     }
