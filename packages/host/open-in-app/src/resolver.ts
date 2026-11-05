@@ -71,13 +71,32 @@ export type OpenInAppLaunchOutcome = 'launched' | 'missing' | 'failed'
  * @param options - watch-window length and adapter-specific process options.
  * @returns after the launch is counted successful; rejects on early failure.
  */
+/** Inherited variables that make an Electron binary run as Node instead of starting its GUI. */
+const EXTERNAL_LAUNCH_ENV_EXCLUSIONS: ReadonlySet<string> = new Set(['ELECTRON_RUN_AS_NODE'])
+
+/**
+ * Environment for one detached external application: the credential-scrubbed parent
+ * environment without Electron node-mode control variables, then the adapter's explicit
+ * entries. Desktop hosts run with `ELECTRON_RUN_AS_NODE=1`; inheriting it makes Electron
+ * editors (VS Code, Cursor, …) run as Node and fail on the workspace argument.
+ * @param overrides - adapter-declared environment entries, merged last.
+ * @returns the child environment.
+ */
+export function externalAppEnvironment(
+  overrides: Readonly<Record<string, string>> | undefined,
+): Record<string, string> {
+  const environment = scrubbedParentEnv()
+  for (const name of EXTERNAL_LAUNCH_ENV_EXCLUSIONS) Reflect.deleteProperty(environment, name)
+  return { ...environment, ...overrides }
+}
+
 export const launchDetachedApp: OpenInAppLauncher = (command, args, options) =>
   new Promise((resolve, reject) => {
     const child = spawn(command, [...args], {
       detached: true,
       stdio: 'ignore',
       windowsHide: options.windowsHide,
-      env: { ...scrubbedParentEnv(), ...options.env },
+      env: externalAppEnvironment(options.env),
     })
     let settled = false
     const settle = (outcome: () => void): void => {

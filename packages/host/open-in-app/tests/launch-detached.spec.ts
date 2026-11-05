@@ -14,6 +14,36 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+describe('launchDetachedApp environment', () => {
+  it('removes the inherited Electron node-mode variable while keeping adapter overrides', async () => {
+    vi.useFakeTimers()
+    process.env['ELECTRON_RUN_AS_NODE'] = '1'
+    try {
+      const inherited = new ChildProcess()
+      vi.mocked(spawn).mockReturnValueOnce(inherited)
+      const launched = launchDetachedApp('fixture-app', [], { watchMs: 100 })
+      const inheritedEnv = vi.mocked(spawn).mock.calls[0]![2]!.env as Record<string, string>
+      expect(inheritedEnv).not.toHaveProperty('ELECTRON_RUN_AS_NODE')
+      await vi.advanceTimersByTimeAsync(100)
+      await expect(launched).resolves.toBeUndefined()
+
+      // An adapter that deliberately needs Node mode in the child still wins.
+      const overridden = new ChildProcess()
+      vi.mocked(spawn).mockReturnValueOnce(overridden)
+      const explicit = launchDetachedApp('fixture-app', [], {
+        watchMs: 100, env: { ELECTRON_RUN_AS_NODE: '1' },
+      })
+      const explicitEnv = vi.mocked(spawn).mock.calls[1]![2]!.env as Record<string, string>
+      expect(explicitEnv['ELECTRON_RUN_AS_NODE']).toBe('1')
+      await vi.advanceTimersByTimeAsync(100)
+      await expect(explicit).resolves.toBeUndefined()
+    } finally {
+      delete process.env['ELECTRON_RUN_AS_NODE']
+      vi.useRealTimers()
+    }
+  })
+})
+
 describe('launchDetachedApp watch window', () => {
   it.each(['exit 0', 'exit 3', 'error'] as const)('ignores late %s after unref without killing the child', async (event) => {
     vi.useFakeTimers()
