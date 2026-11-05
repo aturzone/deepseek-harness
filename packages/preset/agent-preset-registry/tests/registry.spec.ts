@@ -62,7 +62,7 @@ describe('declarative preset revisions', () => {
     await ctx.agentPresets.mount(agent.ctx)
     await definition.dispose()
     expect(await ctx.agentPresets.list()).toEqual([])
-    await expect(ctx.agentPresets.resolve()).rejects.toThrow('Unknown agent preset')
+    await expect(ctx.agentPresets.resolve()).rejects.toThrow('Unknown agent preset: standard (available: none)')
     expect(ctx.agentPresets.composedPreset(agent.ctx)).toBe('standard')
     await agent.dispose()
     expect(ctx.agentPresets.inspectCompositions()).toEqual([])
@@ -142,7 +142,7 @@ describe('declarative preset revisions', () => {
     expect(await ctx.agentPresets.readDocument('minimal')).toEqual({
       agentPreset: 'minimal', content: expect.any(String) as string,
     })
-    await expect(ctx.agentPresets.readDocument('absent')).rejects.toThrow('Unknown agent preset: absent')
+    await expect(ctx.agentPresets.readDocument('absent')).rejects.toThrow('Unknown agent preset: absent (available: standard, minimal)')
   })
 })
 
