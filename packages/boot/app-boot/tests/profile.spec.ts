@@ -246,11 +246,11 @@ describe('initProfile', () => {
     const dir = resolveProfileDir('lost', home)
     mkdirSync(join(dir, 'node_modules', 'installed-plugin'), { recursive: true })
     writeFileSync(join(dir, PROFILE_PATCH_FILENAME), '- id: x\n  config: {}\n')
-    expect(() => initProfile(dir, ['@deepseek-ai/dsh-base'])).toThrow('but no package.json')
-    expect(() => initProfile(dir, ['@deepseek-ai/dsh-base'])).toThrow('refusing to initialize a fresh profile')
+    expect(() => { initProfile(dir, ['@deepseek-ai/dsh-base']) }).toThrow('but no package.json')
+    expect(() => { initProfile(dir, ['@deepseek-ai/dsh-base']) }).toThrow('refusing to initialize a fresh profile')
     expect(existsSync(join(dir, 'package.json'))).toBe(false)
     // The diagnostic names surviving state so the owner can identify the profile.
-    expect(() => initProfile(dir, [])).toThrow('node_modules')
+    expect(() => { initProfile(dir, []) }).toThrow('node_modules')
   })
 
   it('summarizes more than three surviving entries with an ellipsis', () => {
@@ -258,7 +258,7 @@ describe('initProfile', () => {
     const dir = resolveProfileDir('noisy', home)
     for (const name of ['alpha', 'beta', 'gamma', 'delta']) mkdirSync(join(dir, name), { recursive: true })
     // readdir order is filesystem-dependent; only the three-name summary plus ellipsis is contractual.
-    expect(() => initProfile(dir, [])).toThrow(/, …\) but no package\.json/)
+    expect(() => { initProfile(dir, []) }).toThrow(/, …\) but no package\.json/)
   })
 
   it('still initializes a fresh directory that only holds a lock file', () => {
