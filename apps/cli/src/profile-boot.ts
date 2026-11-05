@@ -19,6 +19,7 @@ import {
   boot,
   readProfilePatches,
   createRuntimeResolution,
+  getDshRuntimeVersion,
   initProfile,
   installFailLoud,
   loadOverlayPatches,
@@ -319,6 +320,7 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
       startedBundles: composed.profile.layers.map(layer => layer.packageName),
       cwd: process.cwd(), home: resolveDshHome(),
       overlays: composed.overlays, telemetryDisabledEnv: process.env.DSH_TELEMETRY_DISABLED,
+      runtimeVersion: getDshRuntimeVersion(),
     }
     const ctx = await boot(NAME, rootConfig, readProfilePatches(NAME, profileContext, composed.profile), async (hostCtx) => {
       app.current = hostCtx

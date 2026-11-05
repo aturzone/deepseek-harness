@@ -15,7 +15,7 @@ import {
 
 const runtime = getDshRuntimeVersion()
 
-function fixture() {
+function fixture(runtimeVersion?: string) {
   const temporary = mkdtempSync(join(tmpdir(), 'dsh-preflight-'))
   let ctx: Context | undefined
   onTestFinished(async () => {
@@ -53,6 +53,7 @@ export function apply() { record('apply:${name}') }
     name: 'preflight', dir, patchPath: join(dir, 'cordis.patch.yml'),
     installAnchor: join(dir, 'package.json'), cwd: dir, home: dir,
     startedBundles: [], overlays: [], telemetryDisabledEnv: undefined,
+    ...runtimeVersion === undefined ? {} : { runtimeVersion },
   }
   const configPath = join(dir, 'cordis.yml')
   writeFileSync(configPath, '[]\n')
@@ -83,6 +84,19 @@ it('blocks an incompatible plugin before its module is imported while a compatib
   expect(effects).toEqual(['import:allowed-plugin', 'apply:allowed-plugin'])
   expect(f.warnings.join('\n')).toContain('denied-plugin@1.0.0')
   expect(f.warnings.join('\n')).toContain('data loss')
+})
+
+it('judges plugin requirements against the launcher runtime published in the profile context', async () => {
+  // A bundle can mount its own app-boot copy whose package version differs from the launcher.
+  // The profile context carries the launcher fact so the nested copy does not judge against itself.
+  const launcher = fixture('9.9.9')
+  launcher.plugin('launcher-compatible', { peer: '^9.9.0' })
+  expect(await launcher.run(insert('launcher-compatible'))).toEqual(['import:launcher-compatible', 'apply:launcher-compatible'])
+
+  const withoutFact = fixture()
+  withoutFact.plugin('launcher-compatible', { peer: '^9.9.0' })
+  expect(await withoutFact.run(insert('launcher-compatible'))).toEqual([])
+  expect(withoutFact.warnings.join('\n')).toContain('launcher-compatible@1.0.0')
 })
 
 it('admits the same plugin only for its exact version and the running runtime', async () => {
