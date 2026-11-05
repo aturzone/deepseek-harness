@@ -213,6 +213,18 @@ export class AgentPresetRegistry extends TypertRemoteService {
     return { presets: (await this.list()).map(row => ({ ...row, isDefault: row.id === defaultId })) }
   }
 
+  /**
+   * Rejection for a preset identity that is not currently declared.
+   * @param wanted - the preset identity the caller asked for.
+   * @returns the failure naming the missing id and every available id.
+   */
+  private unknownPreset(wanted: string): RemoteError {
+    const available = [...this.definitions.keys()]
+    return new RemoteError('agent-preset/not-found',
+      `Unknown agent preset: ${wanted} (available: ${available.join(', ') || 'none'})`,
+      { agentPreset: wanted, available })
+  }
+
   /** Resolve an identity without starting an Agent.
    * @param id Explicit preset or the current default.
    * @returns Current metadata, including failure when activation failed.
@@ -220,8 +232,7 @@ export class AgentPresetRegistry extends TypertRemoteService {
   async resolve(id?: string): Promise<AgentPreset> {
     const wanted = id ?? this.defaultId
     const record = this.definitions.get(wanted)
-    if (record === undefined) throw new RemoteError('agent-preset/not-found', `Unknown agent preset: ${wanted}`,
-      { agentPreset: wanted, available: [...this.definitions.keys()] })
+    if (record === undefined) throw this.unknownPreset(wanted)
     const broken = await this.diagnostic(record)
     return { id: wanted, ...(broken === undefined ? {} : { broken }) }
   }
@@ -233,10 +244,7 @@ export class AgentPresetRegistry extends TypertRemoteService {
   @Remote('read')
   readDocument(agentPreset: string): Promise<AgentPresetDocument> {
     const record = this.definitions.get(agentPreset)
-    if (record === undefined) {
-      return Promise.reject(new RemoteError('agent-preset/not-found', `Unknown agent preset: ${agentPreset}`,
-        { agentPreset, available: [...this.definitions.keys()] }))
-    }
+    if (record === undefined) return Promise.reject(this.unknownPreset(agentPreset))
     const { id, name, description, plugins } = record.config
     // The Loader's own dialect, so `!!js` conditions read as declared rather than as expression objects.
     const content = dump(plugins, { schema: entryListSchema, noRefs: true, lineWidth: -1 })
@@ -249,8 +257,7 @@ export class AgentPresetRegistry extends TypertRemoteService {
     const wanted = id ?? this.defaultId
     while (true) {
       const record = this.definitions.get(wanted)
-      if (record === undefined) throw new RemoteError('agent-preset/not-found', `Unknown agent preset: ${wanted}`,
-        { agentPreset: wanted, available: [...this.definitions.keys()] })
+      if (record === undefined) throw this.unknownPreset(wanted)
       const broken = await this.diagnostic(record)
       if (this.definitions.get(wanted) !== record) continue
       const generation = record.generation
