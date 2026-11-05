@@ -189,11 +189,21 @@ autoInstallPeers: false
 `
 
 /**
+ * Files this initializer owns inside a fresh profile directory. A directory holding
+ * anything else is not a fresh profile and must not be reset silently.
+ */
+const PROFILE_INITIALIZATION_FILES: ReadonlySet<string> = new Set([PROFILE_PATCH_FILENAME, 'pnpm-workspace.yaml', 'lock'])
+
+/**
  * Initialize a profile directory: manifest, empty user patch layer, and the
  * pnpm settings out-of-tree plugins need. Existing files are never touched,
- * so re-running is a no-op on an initialized profile.
+ * so re-running is a no-op on an initialized profile. A directory that already
+ * holds plugin or user state but lost its manifest is refused instead of being
+ * rewritten as a fresh profile, so a missing manifest never silently drops the
+ * installed bundles.
  * @param dir - the profile directory from {@link resolveProfileDir}.
  * @param bundles - the initial `dsh.profile.bundles` layer list.
+ * @throws When the directory holds state but no `package.json` manifest.
  */
 export function initProfile(
   dir: string,
@@ -202,6 +212,14 @@ export function initProfile(
   mkdirSync(dir, { recursive: true })
   const manifestPath = join(dir, 'package.json')
   if (!existsSync(manifestPath)) {
+    const foreign = readdirSync(dir).filter(name => !PROFILE_INITIALIZATION_FILES.has(name))
+    if (foreign.length > 0) {
+      const shown = foreign.slice(0, 3).join(', ') + (foreign.length > 3 ? ', …' : '')
+      throw new Error(
+        `profile ${dir} has existing state (${shown}) but no package.json; refusing to initialize a fresh profile over it. `
+        + 'Restore the profile manifest from a backup, or remove the profile directory to reset it.',
+      )
+    }
     const manifest: ProfileManifest & { private: boolean } = {
       name: `dsh-profile-${basename(dir)}`,
       private: true,

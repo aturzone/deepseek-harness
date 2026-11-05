@@ -240,6 +240,28 @@ describe('initProfile', () => {
     expect(readProfileManifest('t', dir).dsh?.profile?.bundles).toEqual(['@deepseek-ai/dsh-base'])
     expect(readFileSync(join(dir, PROFILE_PATCH_FILENAME), 'utf8')).toContain('- id: x')
   })
+
+  it('refuses to initialize a profile that already holds state but lost its manifest', () => {
+    const home = tmp()
+    const dir = resolveProfileDir('lost', home)
+    mkdirSync(join(dir, 'node_modules', 'installed-plugin'), { recursive: true })
+    writeFileSync(join(dir, PROFILE_PATCH_FILENAME), '- id: x\n  config: {}\n')
+    expect(() => initProfile(dir, ['@deepseek-ai/dsh-base'])).toThrow('but no package.json')
+    expect(() => initProfile(dir, ['@deepseek-ai/dsh-base'])).toThrow('refusing to initialize a fresh profile')
+    expect(existsSync(join(dir, 'package.json'))).toBe(false)
+    // The diagnostic names surviving state so the owner can identify the profile.
+    expect(() => initProfile(dir, [])).toThrow('node_modules')
+  })
+
+  it('still initializes a fresh directory that only holds a lock file', () => {
+    const home = tmp()
+    const dir = resolveProfileDir('locked', home)
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'lock'), '123\n')
+    initProfile(dir, ['@deepseek-ai/dsh-base'])
+    expect(readProfileManifest('t', dir).dsh?.profile?.bundles).toEqual(['@deepseek-ai/dsh-base'])
+    expect(existsSync(join(dir, 'lock'))).toBe(true)
+  })
 })
 
 describe('manifest round-trip', () => {
