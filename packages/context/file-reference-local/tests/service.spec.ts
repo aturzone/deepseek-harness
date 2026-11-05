@@ -42,6 +42,7 @@ async function stubAgent(
   ctx: Context,
   id = 'file-reference-agent',
   includeCwd = true,
+  agentContext: Context = ctx,
 ): Promise<{ agent: Agent; dispose: () => Promise<void> }> {
   const root = await mkdtemp(join(tmpdir(), 'dsh-file-reference-service-'))
   roots.push(root)
@@ -53,7 +54,7 @@ async function stubAgent(
     session,
     status: 'idle',
     acceptsNextStep: false,
-    ctx,
+    ctx: agentContext,
     followup() {},
     steer() {},
     inject() {},
@@ -87,6 +88,20 @@ describe('LocalFileReferenceService', () => {
     } finally {
       await ctx.fiber.dispose()
     }
+  })
+
+  it('skips a registered agent whose scope is already disposed instead of failing activation', async () => {
+    const ctx = await harness()
+    const unloadedScope = ctx.plugin({ name: 'unloaded-agent-scope', apply() {} })
+    await unloadedScope
+    const { agent } = await stubAgent(ctx, 'unloaded-scope', true, unloadedScope.ctx)
+    expect(ctx.agents.get(agent.id)).toBe(agent)
+    await unloadedScope.dispose()
+    // The registry entry outlives the scope during teardown. Installing the prompt on
+    // that scope would reject with INACTIVE_EFFECT and fail the whole provider.
+    await expect(ctx.plugin(LocalFileReferenceService)).resolves.toBeDefined()
+    expect(ctx.fileReferences).toBeInstanceOf(LocalFileReferenceService)
+    await ctx.fiber.dispose()
   })
 
   it('serves the addressed workspace and installs read-tool guidance for existing agents', async () => {
