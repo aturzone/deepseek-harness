@@ -82,6 +82,31 @@ describe('assistant replay provider and model fields', () => {
   })
 })
 
+describe('tool result text is persisted well-formed', () => {
+  it('replaces a lone surrogate before the tool/result record', async () => {
+    const adapter = new MockAdapter([toolCallResponse('c1', 'raw', {}), textResponse('done')])
+    const ctx = await harness(adapter)
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a-surrogate-result'), { provider: 'mock', model: 'mock' })
+    ctx.tools.register(defineContentToolFixture({
+      name: 'raw',
+      description: '',
+      parameters: {},
+      async execute() {
+        return [{ type: 'text', text: 'A\uD800B' }]
+      },
+    }))
+
+    send(agent, 'go')
+    await waitForIdle(ctx, agent)
+
+    const result = agent.session.snapshotEvents().find(event => event.type === 'tool/result')
+    expect(result?.type === 'tool/result' ? result.data.message.content : undefined)
+      .toEqual([{ type: 'text', text: 'A\uFFFDB' }])
+    // The stored record can be replayed and sent to the model without the lone escape.
+    expect(JSON.stringify(result)).not.toContain('\\ud800')
+  })
+})
+
 describe('abort during tool execution ends the turn', () => {
   it('parks context finalized after a tool-step abort until another wakeup', async () => {
     const adapter = new MockAdapter([

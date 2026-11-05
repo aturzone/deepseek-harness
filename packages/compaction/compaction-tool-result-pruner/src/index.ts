@@ -8,6 +8,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { freezeMessage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
+import { wellFormedToolResult } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent, SessionSeq, ToolResultMessage } from '@deepseek-ai/dsh-session'
 // Type-only: the `compaction/*` SessionEventMap merges (the shadow-price event).
 import type {} from '@deepseek-ai/dsh-compaction'
@@ -162,10 +163,10 @@ export class ToolResultPruner extends Service {
         shadowedSeqs: [seq],
         shadowedTokenCount: this.ctx.tokenMeter.estimateMessage(original),
       })
-      const replacement = session.append('tool/result', {
+      const replacement = session.append('tool/result', wellFormedToolResult({
         ...event.data,
         message,
-      }, {
+      }), {
         surfaceOp: { op: 'replace', startSeq: seq, endSeq: seq },
         sourceEventSeqs: [seq],
       })
