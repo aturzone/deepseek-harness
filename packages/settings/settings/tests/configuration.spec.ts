@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { parse } from 'yaml'
 import z from '@deepseek-ai/schemastery'
-import { configurationFixture as fixture } from './configuration-fixture.ts'
+import { configurationFixture as fixture, type StandardSchemaConfig } from './configuration-fixture.ts'
 
 it('persists a model edit, updates the real consumer without remounting, and restores it at restart', async () => {
   const { ctx, profile, start } = await fixture()
@@ -125,6 +125,19 @@ it('refuses missing entries and ordinary-only plugin forms', async () => {
   const entry = ctx.configEditor.entries().find(entry => entry.options.id === 'first')!
   await entry.update({ disabled: true })
   await expect(ctx.configEditor.edit(entry, () => ({}))).rejects.toThrow()
+})
+
+it('skips a Standard Schema Config that is not Schemastery instead of failing describe', async () => {
+  // The Loader accepts any Standard Schema Config; form projection must not assume Schemastery's meta graph.
+  const standardSchema: StandardSchemaConfig = {
+    '~standard': { version: 1, vendor: 'other', validate: (value: unknown) => ({ value }) },
+    toJSON: () => ({ type: 'object', properties: {} }),
+  }
+  const { ctx } = await fixture({ schema: standardSchema, hmr: false })
+  const descriptors = ctx.settings.describe()
+  expect(descriptors.some(row => row.ns === 'first')).toBe(false)
+  expect(descriptors.some(row => row.ns === 'default-model')).toBe(true)
+  await expect(ctx.settings.update('first', {})).rejects.toThrow('No configurable')
 })
 
 it('edits and resets nested fields while retaining ordinary siblings', async () => {

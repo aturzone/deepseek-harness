@@ -12,7 +12,21 @@ import Hmr from '@deepseek-ai/dsh-hmr'
 import DefaultModel from '@deepseek-ai/dsh-agent-default-model'
 import Settings from '../src/index.ts'
 
-export async function configurationFixture(options: { schema?: z; apply?: (ctx: Context, config: unknown) => void; hmr?: boolean } = {}) {
+/** A Standard Schema plugin Config that is not Schemastery, as the Loader accepts it. */
+export interface StandardSchemaConfig {
+  '~standard': {
+    version: 1
+    vendor: string
+    validate: (value: unknown) => { value: unknown }
+  }
+  toJSON: () => unknown
+}
+
+export async function configurationFixture(options: {
+  schema?: z | StandardSchemaConfig
+  apply?: (ctx: Context, config: unknown) => void
+  hmr?: boolean
+} = {}) {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'settings-config-')))
   const dir = join(home, 'profiles', 'test')
   onTestFinished(() => { rmSync(home, { recursive: true, force: true }) })
