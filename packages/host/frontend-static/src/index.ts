@@ -86,7 +86,10 @@ function bytesBody(bytes: Uint8Array): ReadableStream<Uint8Array> {
  * @param renderIndex - turns the raw index.html body into the served document
  * for the dist root and configured index path.
  * @returns the dist response; a HEAD response carries the GET status and
- * headers without a body. A file other than the index carries
+ * headers without a body. The rendered index carries `cache-control: no-store`
+ * because its bytes embed the current build's boot injections, so a cached
+ * document would boot against a generation the server no longer serves. A file
+ * other than the index carries
  * `cache-control: no-cache` and a weak ETag from a SHA-1 of its bytes, and a
  * request whose `If-None-Match` equals that ETag receives an empty 304.
  */
@@ -107,7 +110,7 @@ async function serveStatic(
       const refusal = authorizeIndex()
       if (refusal !== undefined) return refusal
       body = renderIndex(await readFile(distIndex, 'utf8'))
-      headers = { 'content-type': HTML_MIME }
+      headers = { 'content-type': HTML_MIME, 'cache-control': 'no-store' }
     } else {
       body = await readFile(target)
       // Weak: gzip changes the transferred bytes.
