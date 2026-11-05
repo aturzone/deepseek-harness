@@ -263,7 +263,7 @@ export class AgentPresetRegistry extends TypertRemoteService {
       const generation = record.generation
       if (broken !== undefined || generation === undefined) {
         const reason = broken as string
-        throw new RemoteError('agent-preset/invalid', reason, { agentPreset: wanted, reason })
+        throw new RemoteError('agent-preset/invalid', `Agent preset "${wanted}" is invalid: ${reason}`, { agentPreset: wanted, reason })
       }
       generation.users++
       return generation
