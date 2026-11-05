@@ -9,7 +9,7 @@
  */
 
 import { constants } from 'node:fs'
-import { access, stat } from 'node:fs/promises'
+import { access, lstat, stat } from 'node:fs/promises'
 import { userInfo } from 'node:os'
 import { delimiter, extname, isAbsolute, resolve } from 'node:path'
 import type { Duplex } from 'node:stream'
@@ -185,9 +185,10 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
       let executable = false
       try {
         executable = await isExecutableFile(candidate)
-      } catch (_unusableCandidate) {
-        // A missing or inaccessible candidate leaves the next PATH candidate to try;
-        // the final miss receives one stable error.
+      } catch (error: unknown) {
+        // A Windows App Execution Alias still launches even though following its
+        // reparse point to the target ACL makes stat() fail with EACCES.
+        executable = await isWindowsAppExecutionAlias(candidate, error)
       }
       signal?.throwIfAborted()
       if (executable) return candidate
@@ -373,6 +374,35 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
     }
     void handle.done.then(release, release).catch(() => {})
     return handle
+  }
+}
+
+/**
+ * Whether a failed `stat()` executable probe still names a launchable Windows
+ * App Execution Alias. Microsoft Store installs expose shells such as
+ * `%LOCALAPPDATA%\Microsoft\WindowsApps\pwsh.exe` as reparse points: `stat()`
+ * follows the link and hits the target ACL (EACCES or EPERM), while
+ * `CreateProcess` launches the alias. `lstat()` opens the entry itself and
+ * reports the alias as a symlink on current Node releases and as a plain file
+ * on older ones; a missing or unreadable entry is not accepted.
+ * @param candidate - Absolute candidate path whose `stat()` probe failed.
+ * @param error - The probe failure to classify.
+ * @param platform - Platform to decide for; defaults to the process platform.
+ * @returns True when the candidate should be accepted despite the failed probe.
+ */
+export async function isWindowsAppExecutionAlias(
+  candidate: string,
+  error: unknown,
+  platform: NodeJS.Platform = process.platform,
+): Promise<boolean> {
+  if (platform !== 'win32') return false
+  const code = (error as NodeJS.ErrnoException).code
+  if (code !== 'EACCES' && code !== 'EPERM') return false
+  try {
+    const entry = await lstat(candidate)
+    return entry.isFile() || entry.isSymbolicLink()
+  } catch {
+    return false
   }
 }
 
