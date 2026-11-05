@@ -57,6 +57,9 @@
       "path": "../fs-patch"
     },
     {
+      "path": "../../util/output-retention"
+    },
+    {
       "path": "../../util/values"
     },
     {

@@ -51,6 +51,15 @@ describe('buildWindow', () => {
     expect(result.lines[0]?.text).toContain(`... (line truncated to ${READ_MAX_LINE_LENGTH} chars)`)
   })
 
+  it('never leaves a lone high surrogate when the line cut lands inside a pair', async () => {
+    // The emoji's high surrogate sits at index 4; a 5-code-unit cut would keep it without its low half.
+    const line = 'aaaa😀bb'
+    const result = await buildWindow(whole(line), { offset: 1, limit: 10, maxLineLength: 5, maxBytes: READ_MAX_BYTES }, 'f')
+    const text = result.lines[0]?.text ?? ''
+    expect(text).toBe('aaaa... (line truncated to 5 chars)')
+    expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(text)).toBe(false)
+  })
+
   it('caps output bytes and reports truncatedByBytes', async () => {
     const big = Array.from({ length: 2000 }, () => 'y'.repeat(100)).join('\n')
     const result = await buildWindow(whole(big), READ_ALL, 'f')
