@@ -410,12 +410,17 @@ describe('real Loader composition', () => {
     expect(rebuilt.headers.get('etag')).not.toBe(etag)
     expect(await rebuilt.text()).toBe('export const rebuilt = true')
 
-    // Only the rendered index carries no cache headers; another HTML file revalidates.
+    // The rendered index is never cacheable; another HTML file revalidates.
     const html = await fetch(`${base}/preview.html`)
     expect([html.status, html.headers.get('cache-control')]).toEqual([200, 'no-cache'])
     expect(html.headers.get('etag')).toMatch(/^W\//)
     expect(await html.text()).toBe('<body>preview</body>')
     const index = await loaded.webServer.readResource(new Request(`${base}/`), reader)
-    expect([index.status, index.headers.get('cache-control'), index.headers.get('etag')]).toEqual([200, null, null])
+    expect([index.status, index.headers.get('cache-control'), index.headers.get('etag')]).toEqual([200, 'no-store', null])
+    // `/index.html` and a query-carrying root are the same document and must not be cached either.
+    for (const path of ['/index.html', '/?token=stale']) {
+      const served = await loaded.webServer.readResource(new Request(`${base}${path}`), reader)
+      expect([path, served.status, served.headers.get('cache-control')]).toEqual([path, 200, 'no-store'])
+    }
   })
 })
