@@ -33,7 +33,7 @@ let restoreGitCommandLineConfig: () => void
 beforeAll(() => { restoreGitCommandLineConfig = isolateGitCommandLineConfig() })
 afterAll(() => { restoreGitCommandLineConfig() })
 
-async function fixture(reload: 'live' | 'startup' = 'live', overlay = false, prepare?: (ctx: Context) => void, config: Config = {}, packageManager?: ProfileContext['packageManager'], prepareFiles?: (dir: string) => void, sourceInstallation = false) {
+async function fixture(reload: 'live' | 'startup' = 'live', overlay = false, prepare?: (ctx: Context) => void, config: Config = {}, packageManager?: ProfileContext['packageManager'], prepareFiles?: (dir: string) => void, sourceInstallation = false, runtimeVersion?: string) {
   const temporaryHome = mkdtempSync(join(tmpdir(), 'plugin-manager-'))
   let owner: Context | undefined
   onTestFinished(async () => { await owner?.fiber.dispose(); rmSync(temporaryHome, { recursive: true, force: true }) })
@@ -67,9 +67,10 @@ async function fixture(reload: 'live' | 'startup' = 'live', overlay = false, pre
   const profile: ProfileContext = {
     name: 'test',
     ...(packageManager === undefined ? {} : { packageManager }),
-    startedBundles: loadProfileDirectory('test', dir, anchor).layers.map(layer => layer.packageName),
+    startedBundles: loadProfileDirectory('test', dir, anchor, runtimeVersion === undefined ? {} : { runtimeVersion }).layers.map(layer => layer.packageName),
     dir, patchPath: join(dir, 'cordis.patch.yml'), installAnchor: anchor, cwd: home, home,
     overlays, telemetryDisabledEnv: undefined,
+    ...runtimeVersion === undefined ? {} : { runtimeVersion },
   }
   const ctx = await boot('test', join(dir, 'cordis.yml'), readProfilePatches('test', profile), (ctx) => {
     owner = ctx
@@ -1715,6 +1716,18 @@ it('answers the configured registries in pnpm\'s comparison form with what pnpm 
   expect(await manager.registries()).toEqual({ registry: 'https://npm.corp.example/', fallbackRegistries: [], resolved: OFFICIAL })
   expect(() => PluginManager.Config({ registry: 'npm.corp.example' })).toThrow()
   expect(() => PluginManager.Config({ fallbackRegistries: ['ftp://npm.corp.example/'] })).toThrow()
+})
+
+it('judges bundle requirements against the launcher runtime published in the profile context', async () => {
+  const { manager, ctx } = await fixture('live', false, undefined, {}, undefined, (dir) => {
+    const file = join(dir, 'node_modules', 'extra', 'package.json')
+    const metadata = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>
+    writeFileSync(file, JSON.stringify({ ...metadata, peerDependencies: { '@deepseek-ai/dsh': '999.0.0' } }))
+  }, false, '999.0.0')
+  // The published launcher fact satisfies the peer, so the layer loads and the
+  // bundle manager must agree instead of re-judging against its own app-boot version.
+  expect([...ctx.loader.entries()].some(entry => entry.id === 'include:managed')).toBe(true)
+  expect((await manager.listBundles()).find(bundle => bundle.name === 'extra')?.error).toBeUndefined()
 })
 
 it.each(['live', 'startup'] as const)('requires exact risk acknowledgement and preserves exemptions in a %s profile', async (mode) => {
