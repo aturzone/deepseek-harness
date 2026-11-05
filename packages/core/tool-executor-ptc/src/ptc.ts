@@ -11,7 +11,6 @@ import type { PtcDispatchLog } from './runtime-types.ts'
 import { symbols, type Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { createUserMessage, HarnessError, resolveImageAttachmentAccess } from '@deepseek-ai/dsh-llm'
-import { SessionTurnScopeError } from '@deepseek-ai/dsh-session'
 
 import type { ContentBlock, ToolCallId, ToolSchema } from '@deepseek-ai/dsh-llm'
 import { PtcImage } from '@deepseek-ai/dsh-ptc-runtime'
@@ -534,11 +533,11 @@ export function createRunCodeTransport(
                     ...result.meta === undefined ? {} : { meta: result.meta },
                   })
                 } catch (error: unknown) {
-                  if (!(error instanceof SessionTurnScopeError)) throw error
-                  // The owning turn closed while this settle append was pending
-                  // (an abandoned tool call). The record is log-only, so drop it
-                  // rather than leave a session the reader cannot load.
-                  logger.warn(`tools: dropped tool/ptc-dispatch for ${name}: ${error.message}`)
+                  // The record is log-only and the append committed nothing, so any
+                  // failure here is dropped instead of surfacing as an unhandled
+                  // rejection from this detached task. The common cause is a turn
+                  // that closed while the settle was pending (an abandoned call).
+                  logger.warn(`tools: dropped tool/ptc-dispatch for ${name}: ${String(error)}`)
                 }
               })().finally(() => { logWork.delete(task) })
               logWork.add(task)
@@ -565,13 +564,10 @@ export function createRunCodeTransport(
                     startLogged = true
                   }
                 } catch (error: unknown) {
-                  if (!(error instanceof SessionTurnScopeError)) throw error
-                  // The owning turn closed before this queued call started (its
-                  // tool call was abandoned). The dispatch record is log-only, so
-                  // drop it: appending outside the turn would make the stored
-                  // session unreadable. `startLogged` stays false, so the settle
-                  // append is skipped too.
-                  logger.warn(`tools: dropped tool/ptc-dispatch-start for ${name}: ${error.message}`)
+                  // Same log-only drop as the settle append: the failed start
+                  // committed nothing, and `startLogged` stays false so the settle
+                  // append is skipped too. A closed turn is the usual cause.
+                  logger.warn(`tools: dropped tool/ptc-dispatch-start for ${name}: ${String(error)}`)
                 }
                 // Ordered prepare runs INSIDE the driver lane: the next entry's
                 // pre-execute waits for this resolution, as under the native
