@@ -245,6 +245,25 @@ describe('fetch formatting', () => {
     body: { kind: 'html', content },
   }, NO_CAP).slice(HEADER.length)
 
+  it('never leaves a lone high surrogate when the whole-output cap lands inside a pair', () => {
+    const content = 'a'.repeat(40) + '😀'.repeat(5) + 'b'.repeat(400)
+    const render = (cap: number) => formatFetchOutput({
+      url: 'https://a.test', statusCode: 200, truncated: false,
+      body: { kind: 'text', content },
+    }, cap)
+    const headerLength = render(NO_CAP).length - content.length
+    const withFooter = formatFetchOutput({
+      url: 'https://a.test', statusCode: 200, truncated: true,
+      body: { kind: 'text', content },
+    }, NO_CAP)
+    // The output cut happens before the footer, so shift the caps past both the header and footer.
+    const base = headerLength + (withFooter.length - render(NO_CAP).length)
+    for (let cap = base + 41; cap <= base + 49; cap += 1) {
+      const out = render(cap)
+      expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(out), `cap ${String(cap)}`).toBe(false)
+    }
+  })
+
   it('renders an html body to markdown text with a status header', () => {
     const out = formatFetchOutput({
       url: 'https://a.test', statusCode: 200, truncated: false,
