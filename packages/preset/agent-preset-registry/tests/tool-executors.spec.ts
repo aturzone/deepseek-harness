@@ -132,6 +132,8 @@ it.each([true, false])('loads cordis.yml executor presets with runtime availabil
     const pending = agentOn(ctx, 'ptc-package', 'ptc')
     await expect(pending).rejects.toMatchObject({ code: 'agent-preset/invalid' })
     await expect(pending).rejects.toThrow('executor (cordis:ptc): waiting for ptcRuntime')
+    // The failure names the preset so the owner can identify which saved composition to fix.
+    await expect(pending).rejects.toThrow('Agent preset "ptc" is invalid')
     return
   }
   const ptc = await agentOn(ctx, 'ptc-package', 'ptc')
