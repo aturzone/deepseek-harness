@@ -253,6 +253,14 @@ describe('initProfile', () => {
     expect(() => initProfile(dir, [])).toThrow('node_modules')
   })
 
+  it('summarizes more than three surviving entries with an ellipsis', () => {
+    const home = tmp()
+    const dir = resolveProfileDir('noisy', home)
+    for (const name of ['alpha', 'beta', 'gamma', 'delta']) mkdirSync(join(dir, name), { recursive: true })
+    // readdir order is filesystem-dependent; only the three-name summary plus ellipsis is contractual.
+    expect(() => initProfile(dir, [])).toThrow(/, …\) but no package\.json/)
+  })
+
   it('still initializes a fresh directory that only holds a lock file', () => {
     const home = tmp()
     const dir = resolveProfileDir('locked', home)
