@@ -13,6 +13,7 @@ import SessionStore, {
   SessionLogOffset,
   SessionSeq,
   snapshotSessionEvent,
+  wellFormedToolResult,
 } from '@deepseek-ai/dsh-session'
 import type { CreateSessionOptions, SessionEventType, SessionHeader, SessionSurface } from '@deepseek-ai/dsh-session'
 
@@ -22,6 +23,61 @@ declare module '@deepseek-ai/dsh-llm' {
     'watcher': { kind: 'watcher' } & ContextFormed
   }
 }
+
+describe('wellFormedToolResult', () => {
+  it('replaces lone surrogate halves in model-visible text and the recorded failure reason', () => {
+    const raw = 'A\uD800B'
+    const data = {
+      turn: 1, step: 1,
+      message: createToolResultMessage({
+        callId: brandString<ToolCallId>('c1'),
+        content: [{ type: 'text', text: raw }, { type: 'reasoning', text: raw }, { type: 'tool-removal', toolName: 'x' }],
+        isError: true,
+      }),
+      error: { name: 'Failure', code: 'failed', reason: raw },
+    }
+    const sanitized = wellFormedToolResult(data)
+    expect(sanitized.message.content).toEqual([
+      { type: 'text', text: 'A\uFFFDB' },
+      { type: 'reasoning', text: 'A\uFFFDB' },
+      { type: 'tool-removal', toolName: 'x' },
+    ])
+    expect(sanitized.error?.reason).toBe('A\uFFFDB')
+    // A failure identity without a reason takes the untouched branch.
+    const withoutReason = wellFormedToolResult({
+      turn: 1, step: 1,
+      message: createToolResultMessage({ callId: brandString<ToolCallId>('c3'), content: [{ type: 'text', text: 'ok' }], isError: true }),
+      error: { name: 'Failure', code: 'failed' },
+    })
+    expect(withoutReason.error).toEqual({ name: 'Failure', code: 'failed' })
+    // A well-formed reason is left untouched.
+    const cleanReason = wellFormedToolResult({
+      turn: 1, step: 1,
+      message: createToolResultMessage({ callId: brandString<ToolCallId>('c4'), content: [{ type: 'text', text: 'ok' }], isError: true }),
+      error: { name: 'Failure', code: 'failed', reason: 'plain' },
+    })
+    expect(cleanReason.error).toEqual({ name: 'Failure', code: 'failed', reason: 'plain' })
+    // Sanitized text with no failure reason exercises the two comparisons independently.
+    const textOnly = wellFormedToolResult({
+      turn: 1, step: 1,
+      message: createToolResultMessage({ callId: brandString<ToolCallId>('c5'), content: [{ type: 'text', text: 'A\uD800B' }], isError: false }),
+    })
+    expect(textOnly.message.content).toEqual([{ type: 'text', text: 'A\uFFFDB' }])
+    // Clean text with a raw reason changes only the error branch.
+    const reasonOnly = wellFormedToolResult({
+      turn: 1, step: 1,
+      message: createToolResultMessage({ callId: brandString<ToolCallId>('c6'), content: [{ type: 'text', text: 'ok' }], isError: true }),
+      error: { name: 'Failure', code: 'failed', reason: 'A\uD800B' },
+    })
+    expect(reasonOnly.error?.reason).toBe('A\uFFFDB')
+    // Well-formed data keeps its identity instead of being copied.
+    const clean = wellFormedToolResult({
+      turn: 1, step: 1,
+      message: createToolResultMessage({ callId: brandString<ToolCallId>('c2'), content: [{ type: 'text', text: 'ok' }], isError: false }),
+    })
+    expect(clean.message.content).toEqual([{ type: 'text', text: 'ok' }])
+  })
+})
 
 describe('Session', () => {
   it('exposes one stable readonly surface view', () => {

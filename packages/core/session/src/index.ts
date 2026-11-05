@@ -12,7 +12,7 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import { assertNever, deepFreeze, snapshotJsonValue } from '@deepseek-ai/dsh-util-values'
 import { scopeOf, scopeTarget } from '@deepseek-ai/dsh-scope'
 import type { Scoped } from '@deepseek-ai/dsh-scope'
-import type { Message } from '@deepseek-ai/dsh-llm'
+import type { ContentBlock, Message, ToolResultMessage } from '@deepseek-ai/dsh-llm'
 import { SESSION_FORMAT_VERSION, SessionLogOffset, SessionSeq } from './types.ts'
 import type { TypertLookup } from '@deepseek-ai/dsh-typert-protocol'
 import type { CreateSessionOptions, EpochHeader, PluginRecord, PluginRecordMap, PluginRecordType, PrepareSessionOptions, RequestContext, SessionEvent, SessionEventInput, SessionEventMap, SessionEventType, SessionHeader, SessionId, SessionSeedEventState, SurfaceIntent, SurfaceEventType } from './types.ts'
@@ -317,6 +317,38 @@ function assertAdapterDefaults(
     || defaults['maxTokens'] === true && config['maxTokens'] === undefined) {
     throw new Error(`seed request/header at index ${index} has invalid adapterDefaults`)
   }
+}
+
+/** Replace lone UTF-16 surrogates in one content block while it is still mutable data. */
+function wellFormedBlock(block: ContentBlock): ContentBlock {
+  if (block.type !== 'text' && block.type !== 'reasoning') return block
+  return block.text.isWellFormed() ? block : { ...block, text: block.text.toWellFormed() }
+}
+
+/** Replace lone surrogate halves in tool-result text before it becomes durable model-visible state. */
+function wellFormedToolMessage(message: ToolResultMessage): ToolResultMessage {
+  const content = message.content.map(wellFormedBlock)
+  return content.every((block, index) => block === message.content[index]) ? message : { ...message, content }
+}
+
+/**
+ * Return tool-result data whose model-visible message text is well-formed UTF-16.
+ *
+ * A tool can emit a lone surrogate from user data, a script, or a raw truncation; the model
+ * API rejects that escape on every later request once it is logged. Replacing only the invalid
+ * halves keeps the recorded text identical to what the model sees.
+ * @param data - the tool/result payload about to be appended.
+ * @returns the same value when every string is already well-formed, else a sanitized copy.
+ */
+export function wellFormedToolResult(data: SessionEventMap['tool/result']): SessionEventMap['tool/result'] {
+  const message = wellFormedToolMessage(data.message)
+  const reason = data.error?.reason
+  const error = data.error === undefined || reason === undefined || reason.isWellFormed()
+    ? data.error
+    : { ...data.error, reason: reason.toWellFormed() }
+  return message === data.message && error === data.error
+    ? data
+    : { ...data, message, ...error === undefined ? {} : { error } }
 }
 
 /** The surface event types whose payload carries an identified message. */
