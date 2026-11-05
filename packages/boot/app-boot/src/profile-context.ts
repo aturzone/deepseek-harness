@@ -27,6 +27,12 @@ export interface ProfileContext {
   readonly overlays: readonly PatchOptions[]
   /** Launch-time DSH_TELEMETRY_DISABLED value; any non-empty value opts out. */
   readonly telemetryDisabledEnv: string | undefined
+  /**
+   * Running launcher version used for plugin compatibility. A bundle can mount its own
+   * app-boot copy, and that copy would otherwise judge plugins against its own package version.
+   * Defaults to the checking app-boot package's version when the launcher omits it.
+   */
+  readonly runtimeVersion?: string
 }
 
 declare module '@deepseek-ai/cordis' {
