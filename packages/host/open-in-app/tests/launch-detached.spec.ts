@@ -22,7 +22,7 @@ describe('launchDetachedApp environment', () => {
       const inherited = new ChildProcess()
       vi.mocked(spawn).mockReturnValueOnce(inherited)
       const launched = launchDetachedApp('fixture-app', [], { watchMs: 100 })
-      const inheritedEnv = vi.mocked(spawn).mock.calls[0]![2]!.env as Record<string, string>
+      const inheritedEnv = vi.mocked(spawn).mock.calls[0]![2].env ?? {}
       expect(inheritedEnv).not.toHaveProperty('ELECTRON_RUN_AS_NODE')
       await vi.advanceTimersByTimeAsync(100)
       await expect(launched).resolves.toBeUndefined()
@@ -33,7 +33,7 @@ describe('launchDetachedApp environment', () => {
       const explicit = launchDetachedApp('fixture-app', [], {
         watchMs: 100, env: { ELECTRON_RUN_AS_NODE: '1' },
       })
-      const explicitEnv = vi.mocked(spawn).mock.calls[1]![2]!.env as Record<string, string>
+      const explicitEnv = vi.mocked(spawn).mock.calls[1]![2].env ?? {}
       expect(explicitEnv['ELECTRON_RUN_AS_NODE']).toBe('1')
       await vi.advanceTimersByTimeAsync(100)
       await expect(explicit).resolves.toBeUndefined()
