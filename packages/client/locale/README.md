@@ -31,7 +31,7 @@ Use it wherever the web GUI needs a language switch or translated copy: the ship
 
 The Language row uses a smaller label gutter in narrow browser settings; Windows and macOS desktop windows retain the standard spacing.
 
-Open Settings → General and select a registered language. The active locale is applied immediately: the UI copy switches, `<html lang>` points at the external id or built-in document tag, and the choice is written to the durable settings section. A browser without an explicit Host preference selects the first registered language that matches `navigator` by full tag and then primary subtag, falling back to English. A stored external locale waits for its definition to register instead of becoming active while unavailable.
+Open Settings → General and select a registered language. The active locale is applied immediately: the UI copy switches, `<html lang>` points at the external id or built-in document tag, `<html dir>` states the active language's writing direction, and the choice is written to the durable settings section. A browser without an explicit Host preference selects the first registered language that matches `navigator` by full tag and then primary subtag, falling back to English. A stored external locale waits for its definition to register instead of becoming active while unavailable.
 
 Native shells may provide `__DSH_LOCALE__` with an asynchronous `read()` and an `onChange(locale)` callback. Initialization supplies the current Host preference and ordered OS languages before the Client mounts. Automatic selection stays provisional; only Settings selections write `locale.preference`. A fresh read on each page load prevents a stale preload preference after reload. Ordinary browsers keep navigator-based detection and their existing settings-scope policy.
 
@@ -65,7 +65,7 @@ export function apply(ctx) {
 }
 ```
 
-An external id is a non-empty ASCII BCP 47-style tag. Its fallback must already be registered, and the chain must terminate at `en`; unknown targets, duplicate ids, and cycles fail at registration. Lookup walks the fallback chain in the requested namespace, repeats it in `common`, then displays the key. Unloading a definition removes it from the selector and returns an active selection to the available browser/default locale.
+An external id is a non-empty ASCII BCP 47-style tag. Its fallback must already be registered, and the chain must terminate at `en`; unknown targets, duplicate ids, and cycles fail at registration. A right-to-left pack also declares `direction: 'rtl'`; while that language is active the runtime points `<html dir>` at `rtl`, and loading or unloading it reasserts the direction. Bidirectional layout stops at that document attribute: converting a component's physical CSS to logical properties stays with that component. Lookup walks the fallback chain in the requested namespace, repeats it in `common`, then displays the key. Unloading a definition removes it from the selector and returns an active selection to the available browser/default locale.
 
 ### What the Host half does
 
@@ -91,7 +91,7 @@ The provisional locale comes from the browser (`navigator.languages` matched by 
 
 ### Dictionary lookup
 
-Document language synchronization writes `<html lang>` only when its value changes; dictionary-only revisions leave the attribute untouched.
+Document language and writing-direction synchronization writes `<html lang>` and `<html dir>` only when their values change; dictionary-only revisions leave both attributes untouched.
 
 The typed object form requires complete dictionaries for both baseline locales. The per-locale form lets language packs register each namespace independently. For each key, lookup walks the active language's declared fallback chain in the requested namespace, repeats that chain in `common`, then displays the key itself. Bound translate functions retain stable identity per namespace so they can ride inject surfaces without breaking memoization.
 
@@ -137,7 +137,7 @@ None; this package neither assembles nor sends a provider request.
 These limits define where localization is incomplete or frozen at registration time. They are current package constraints, not a task backlog.
 
 - **Registry-held text reads its translation once** — copy captured at registration time outside the slot render path (e.g. the `/model` command description in the command registry) keeps the language it was registered under until re-registration; slot-rendered copy follows switches live.
-- **Language packs own language-specific behavior** — the registry supplies selection, persistence, browser matching, key fallback, and `<html lang>`; it does not add plural rules or bidirectional layout.
+- **Language packs own language-specific behavior** — the registry supplies selection, persistence, browser matching, key fallback, `<html lang>`, and the active writing direction on `<html dir>`; it does not add plural rules, and per-component layout conversion to logical CSS remains each component's work.
 
 <a id="dev-note"></a>
 ### Dev Note

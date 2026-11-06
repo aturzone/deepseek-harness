@@ -59,6 +59,8 @@ export interface LanguageRegistration {
   label: string
   /** Registered language consulted when this language lacks a dictionary key. */
   fallback: LocaleId
+  /** Writing direction the document adopts while this language is active; omitted means left-to-right. */
+  direction?: 'ltr' | 'rtl'
 }
 
 /** One normalized selectable locale published in snapshots. */
@@ -69,6 +71,8 @@ export interface LocaleDefinition {
   readonly label: string
   /** Next language in the per-key fallback chain; absent only for English. */
   readonly fallback?: LocaleId
+  /** Writing direction the document adopts while this language is active; omitted means left-to-right. */
+  readonly direction?: 'ltr' | 'rtl'
 }
 
 /** Immutable locale state published on every change. */
@@ -138,12 +142,23 @@ function normalizeLanguage(input: LanguageRegistration): Readonly<LanguageRegist
   if (!LOCALE_ID_PATTERN.test(input.fallback)) {
     throw new Error(`locale fallback "${input.fallback}" is not a BCP 47-style tag`)
   }
-  return Object.freeze({ id: input.id, label: input.label, fallback: input.fallback })
+  // Language packs are plain JavaScript: direction arrives untyped at this registration boundary.
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- validate the untrusted pack input
+  if (input.direction !== undefined && input.direction !== 'ltr' && input.direction !== 'rtl') {
+    throw new Error(`locale direction "${String(input.direction)}" must be "ltr" or "rtl"`)
+  }
+  return Object.freeze({
+    id: input.id,
+    label: input.label,
+    fallback: input.fallback,
+    ...input.direction === undefined ? {} : { direction: input.direction },
+  })
 }
 
 /**
- * Point `<html lang>` at the active locale, keeping the served document in
- * sync with locale snapshot changes.
+ * Point `<html lang>` and `<html dir>` at the active locale, keeping the served
+ * document in sync with locale snapshot changes. A language pack declares its
+ * writing direction; layout components convert their own physical CSS.
  * @param snapshot - current locale state, including the active definition.
  */
 function syncDocumentLanguage(snapshot: LocaleSnapshot): void {
@@ -151,6 +166,8 @@ function syncDocumentLanguage(snapshot: LocaleSnapshot): void {
   if (typeof document === 'undefined') return
   const language = snapshot.active === 'zh' ? 'zh-CN' : snapshot.active
   if (document.documentElement.lang !== language) document.documentElement.lang = language
+  const direction = snapshot.locales.find(locale => locale.id === snapshot.active)?.direction ?? 'ltr'
+  if (document.documentElement.dir !== direction) document.documentElement.dir = direction
 }
 
 /**
