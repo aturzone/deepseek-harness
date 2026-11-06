@@ -149,6 +149,7 @@ export function useChatScroll(input: ChatScrollInput): ChatScrollState {
       reading.interruptFollow()
     }
     viewport.updateTurns(loadedTurns)
+    viewport.setTurnRunning(running)
     const layoutChanged = previous.order !== order || previous.ready !== ready
     if (layoutChanged) viewport.invalidate()
     viewport.reclaimBelow()

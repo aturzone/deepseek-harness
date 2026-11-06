@@ -88,6 +88,8 @@ export class ChatViewport {
   private settledContent = 0
   /** The pending or running fold batch lands at the tail. */
   private tailRequested = false
+  /** Whether the active Turn still produces content; a finished Turn leaves no room to consume. */
+  private turnRunning = false
   /** The tail request came from the reader's own input rather than from a content change. */
   private tailInput = false
   /** Switches the running batch to a tail landing; null while no batch runs. */
@@ -171,6 +173,12 @@ export class ChatViewport {
   updateTurns(turns: ReturnType<ChatSnapshot['navigation']['items']>): void {
     this.turns = turns
   }
+
+  /**
+   * Publish whether the active Turn still produces content.
+   * @param running - true while the Turn can grow; a finished Turn releases settled fold room at the tail.
+   */
+  setTurnRunning(running: boolean): void { this.turnRunning = running }
 
   /**
    * Resolve the tail from the committed turn index.
@@ -878,6 +886,9 @@ export class ChatViewport {
    * position; native scroll delivery moves it.
    */
   scrollToBottom(follow: ScrollFollow, behavior: 'instant' | 'smooth' = 'instant'): ViewportLanding | null {
+    // A tail landing outranks room reserved for a closed row once the Turn can no longer grow into it:
+    // keeping it would leave the reader's content end above the scrollport bottom (following-tail whitespace).
+    if (!this.turnRunning && !this.motion.foldActive() && this.spacerHeight() > 0) this.setSpacer(0)
     const metrics = this.metrics()
     if (metrics === null || this.elements === null) return null
     this.observation = { top: metrics.top, landing: null }

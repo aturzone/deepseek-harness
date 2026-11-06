@@ -106,7 +106,7 @@ function mountScroll(deferCompletedTurns = true, initial: Partial<ChatScrollInpu
 }
 
 /** A scrollport of stacked rows whose boxes follow scrollTop; closing a row clamps like a browser. */
-function mountRows(heights: readonly number[]) {
+function mountRows(heights: readonly number[], running = true) {
   const callbacks: { motion?: FlowMotionRows; resize?: () => void } = {}
   class Observer implements ResizeObserver {
     constructor(callback: ResizeObserverCallback) { callbacks.resize = () => { callback([], this) } }
@@ -117,7 +117,7 @@ function mountRows(heights: readonly number[]) {
   vi.stubGlobal('ResizeObserver', Observer)
   const input: ChatScrollInput = {
     ready: true, order: [], firstSeq: null, lastKey: null, lastIsUser: false,
-    steeringId: null, submissionId: null, submissionSteers: false, running: false, deferCompletedTurns: false,
+    steeringId: null, submissionId: null, submissionSteers: false, running, deferCompletedTurns: false,
     transcriptView: 'standard', loadedTurns: [], hasMore: false, loadingOlder: false,
     loadOlder: vi.fn(), loadThrough: vi.fn(async () => {}), chatScroll: { read: () => null, save: vi.fn() },
   }
@@ -247,6 +247,17 @@ describe('Chat scroll: a closing shrink keeps the content above still', () => {
     act(() => { vi.advanceTimersByTime(500) })
     h.close(step)
     expect(h.room()).toBe(0)
+  })
+
+  it('releases the room instead of keeping it when the finished turn cannot grow into it', () => {
+    // No later growth is coming from this Turn, so a following reader keeps the content end at the bottom.
+    const h = mountRows([700, 100, 200], false)
+    const [first, step, answer] = [h.row(0), h.row(1), h.row(2)]
+    h.close(step)
+    expect(h.room()).toBe(0)
+    expect(h.top()).toBe(500)
+    expect(h.screenTop(first)).toBe(-500)
+    expect(h.screenTop(answer)).toBe(200)
   })
 
   it('uses the measurement only for the observation of the commit that closed the rows', () => {
@@ -604,7 +615,7 @@ describe('Chat scroll collapse timing', () => {
   })
 
   it('clears a previous fold reservation on an idle mode change', async () => {
-    const h = mountScroll()
+    const h = mountScroll(true, { running: true })
     h.resize()
     h.startFold()
     await act(async () => { await Promise.resolve() })
