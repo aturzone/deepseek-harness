@@ -539,8 +539,13 @@ async function main(): Promise<void> {
         const cookie = await authenticateWebHost(ready.url)
         hostCookie = cookie
         hostUrl = ready.url
-        void removeLegacyHostCookies(session.defaultSession.cookies, ready.url)
-          .catch((error: unknown) => { console.error('desktop: legacy Host cookie cleanup failed', error) })
+        // Prune cookies from earlier random-port Hosts before any page or welcome connection
+        // can send a Cookie header; a failed prune must not block boot.
+        try {
+          await removeLegacyHostCookies(session.defaultSession.cookies, ready.url)
+        } catch (error: unknown) {
+          console.error('desktop: legacy Host cookie cleanup failed', error)
+        }
         if (ready.injections === undefined) throw new Error('Desktop Host did not provide boot injections')
         injections = ready.injections
         welcomeBackend = connectDesktopWelcome(ready.url, cookie)

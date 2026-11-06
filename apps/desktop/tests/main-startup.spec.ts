@@ -1406,6 +1406,23 @@ describe('desktop main startup', () => {
     expect(callback).toHaveBeenLastCalledWith({})
   })
 
+  it('prunes legacy Host cookies before the boot connects the welcome backend', async () => {
+    let release = (): void => {}
+    harness.removeLegacyHostCookies.mockImplementationOnce(() => new Promise<void>((resolve) => { release = resolve }))
+    await import('../src/main.ts')
+    await harness.preparing.promise
+    harness.prepared.resolve()
+    await harness.hostStarted.promise
+    harness.hosts[0]!.ready.resolve()
+    const booting = invoke(DESKTOP_IPC.boot)
+    await vi.waitFor(() => { expect(harness.removeLegacyHostCookies).toHaveBeenCalledWith(harness.hostCookies, 'http://127.0.0.1:3080/?token=test') })
+    // A request can only carry the stale Cookie header after the prune resolves.
+    expect(harness.connectWelcome).not.toHaveBeenCalled()
+    release()
+    await booting
+    expect(harness.connectWelcome).toHaveBeenCalled()
+  })
+
   it('logs a legacy Host cookie cleanup failure without blocking boot', async () => {
     const failure = new Error('cookie store unavailable')
     harness.removeLegacyHostCookies.mockRejectedValueOnce(failure)
