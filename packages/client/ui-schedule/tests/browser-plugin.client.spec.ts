@@ -67,6 +67,8 @@ function injectedFace(entry: StoredEntry, ...args: never[]): object {
   return face
 }
 
+const completionGates: { withheld(sessionId: SessionId): boolean; subscribe(listener: () => void): () => void }[] = []
+
 /**
  * Build the spies for the two right-Sidebar services `apply` requires.
  * @returns fresh spies for the tab registry, the navigation face, and one Session's committed tabs.
@@ -92,6 +94,7 @@ async function baseContext(
   sidebar: SidebarStubs = sidebarStubs(),
   allows: (action: string) => boolean = () => true,
 ): Promise<Context> {
+  completionGates.length = 0
   const ctx = new Context()
   await ctx.plugin(SlotRegistry).await()
   new StaticRemoteAccess(ctx, allows)
@@ -105,6 +108,12 @@ async function baseContext(
     provider.provide('remote.schedule', (remote.schedule ?? {}) as never)
   } }).await()
   ctx.provide('uiWorkspace', { openSession: vi.fn(), startSession: vi.fn() } as never)
+  ctx.provide('uiSession', {
+    registerCompletionGate: (gate: typeof completionGates[number]) => {
+      completionGates.push(gate)
+      return () => { const index = completionGates.indexOf(gate); if (index >= 0) completionGates.splice(index, 1) }
+    },
+  } as never)
   ctx.provide('sidebarRightTabs', { register: sidebar.register } as never)
   ctx.provide('sidebarRight', { openTab: sidebar.openTab, tabsIn: sidebar.tabsIn } as never)
   const id = 'cold-original' as SessionId
@@ -205,7 +214,7 @@ describe('ui-schedule browser half', () => {
 
   it('declares only the services used by registration', () => {
     expect(inject).toEqual([
-      'slots', 'locale', 'remote', 'remote.schedule', 'conversation', 'uiConversation', 'uiWorkspace', 'sessions',
+      'slots', 'locale', 'remote', 'remote.schedule', 'conversation', 'uiConversation', 'uiWorkspace', 'uiSession', 'sessions',
       'workspaces', 'sidebarRightTabs', 'sidebarRight', 'remoteAccess',
     ])
   })
@@ -900,4 +909,42 @@ describe('ui-schedule node half', () => {
   it('keeps the node half inert', () => {
     expect(applyNode).not.toThrow()
   })
+  it('withholds the finished reminder while an active task targets the Session', async () => {
+    let changed = (): void => {}
+    const newTarget: Entry = {
+      ...hostTask, id: 'new-target-task' as ScheduleId, target: { kind: 'new', create: {} },
+    }
+    const schedule = {
+      catalog: vi.fn()
+        .mockResolvedValueOnce({ ok: true, value: [hostTask, newTarget] })
+        .mockResolvedValue({ ok: true, value: [{ ...hostTask, status: 'ended' }, { ...newTarget, status: 'ended' }] }),
+    }
+    const ctx = await baseContext({ schedule, $on: (_event, listener: () => void) => { changed = listener; return () => {} } })
+    ctx.slots.register({
+      name: 'root',
+      children: { 'sidebar.session.row.leading': { kind: 'list', scope: 'session' }, main: { kind: 'keyed', scope: 'root' } },
+    } as never, Empty)
+    const fiber = ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    const gate = completionGates[0]
+    expect(gate).toBeDefined()
+    // The service subscribes the gate to its own source; the wrapper forwards that listener.
+    const unsubscribe = gate!.subscribe(() => {})
+    // Before the first read settles the gate cannot judge, so it withholds nothing.
+    expect(gate!.withheld(COLD_SESSION)).toBe(false)
+    // The Tasks page owns the one catalog read; settling it is what lets the gate judge.
+    const page = injectedFace(ctx.slots.entries('main')[0]!, undefined as never) as TaskManagerInjected
+    await page.onRetry()
+    await vi.waitFor(() => { expect(gate!.withheld(COLD_SESSION)).toBe(true) })
+    expect(gate!.withheld('other-session' as SessionId)).toBe(false)
+    // The Host reports the task ended; the next catalog read releases the reminder.
+    changed()
+    await page.onRetry()
+    await vi.waitFor(() => { expect(gate!.withheld(COLD_SESSION)).toBe(false) })
+    unsubscribe()
+    await fiber.dispose()
+    expect(completionGates).toHaveLength(0)
+    await ctx.fiber.dispose()
+  })
+
 })

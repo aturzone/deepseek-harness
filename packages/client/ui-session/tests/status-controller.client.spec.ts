@@ -9,6 +9,58 @@ const it = createClientTest({ roster: webApp.closure(['@deepseek-ai/dsh-client-u
 const parentId = 'status-parent' as SessionId
 const childId = 'status-child' as SessionId
 
+it('lets a registered completion gate withhold and then restore the finished reminder', async ({ mock, start }) => {
+  mock.remote.session.list.mockResolvedValue(ok({ items: [{
+    sessionId: parentId, updatedAt: 1, running: false, blank: false, agentAvailable: true,
+  }] }))
+  mock.remote.session.projections.mockResolvedValue(ok({
+    kind: 'sequenced',
+    asOfSeq: 0,
+    values: { subagentCatalog: [{ id: childId, createdAt: 1, mode: 'continuable', label: 'Child' }] },
+  }))
+  mock.stream('session/follow', (_request, stream) => {
+    stream.push({
+      type: 'snapshot',
+      header: { version: SESSION_FORMAT_VERSION, id: childId, createdAt: 1, isSeeded: false,
+        parentSession: parentId, origin: 'subagent' },
+      cursor: -1, records: [], hasMore: false,
+      projections: { asOfSeq: -1, values: {} }, assistantStream: { revision: 0 },
+    } satisfies SessionFollowFrame)
+  })
+  const client = await start()
+  await client.ctx.sessions.refresh()
+  await client.ctx.sessions.refreshProjections(parentId)
+  await client.flush()
+  const ui = client.ctx.uiSession
+
+  let withheld = true
+  let notify = (): void => {}
+  const disposeGate = ui.registerCompletionGate({
+    withheld: () => withheld,
+    subscribe: (listener) => { notify = listener; return () => { notify = () => {} } },
+  })
+
+  mock.streams.push('$events', { type: 'emit', event: 'api-session/status', args: [childId, true] })
+  await mock.streams.drained('$events')
+  await client.flush()
+  mock.streams.push('$events', { type: 'emit', event: 'api-session/status', args: [childId, false] })
+  await mock.streams.drained('$events')
+  await client.flush()
+  // The stop happened while the gate withholds the reminder.
+  expect(ui.sessionStatus.getSnapshot().get(childId)).toMatchObject({ running: false, completionUnread: false })
+
+  withheld = false
+  notify()
+  await client.flush()
+  // The reminder returns as soon as the gate releases it, without another turn.
+  expect(ui.sessionStatus.getSnapshot().get(childId)).toMatchObject({ running: false, completionUnread: true })
+
+  // The disposer is idempotent: a second call finds the gate already removed.
+  disposeGate()
+  disposeGate()
+  expect(ui.sessionStatus.getSnapshot().get(childId)).toMatchObject({ running: false, completionUnread: true })
+})
+
 it('preserves unlisted child status through metadata updates and main view acknowledgement', async ({ mock, start }) => {
   mock.remote.session.list.mockResolvedValue(ok({ items: [{
     sessionId: parentId, updatedAt: 1, running: false, blank: false, agentAvailable: true,

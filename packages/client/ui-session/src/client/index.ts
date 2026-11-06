@@ -66,6 +66,22 @@ export interface SessionStatus {
   readonly completionUnread: boolean
 }
 
+/** A plugin-owned reason to withhold the finished-but-unviewed reminder for some Sessions. */
+export interface CompletionGate {
+  /**
+   * Whether this source currently withholds the reminder for one Session.
+   * @param sessionId - Session whose row may show the finished reminder.
+   * @returns true while the reminder would misrepresent pending work.
+   */
+  withheld(sessionId: SessionId): boolean
+  /**
+   * Observe the facts behind {@link CompletionGate.withheld}.
+   * @param listener - called when withholding may have changed.
+   * @returns unsubscribe callback.
+   */
+  subscribe(listener: () => void): () => void
+}
+
 /** Current UI status indexed by Session identity. */
 export type SessionStatusSnapshot = ReadonlyMap<SessionId, SessionStatus>
 /** Selector hook over the unified Session UI status snapshot. */
@@ -290,6 +306,7 @@ export class UiSession extends Service {
   private pendingSnapshot: ReadonlyMap<SessionId, SessionPendingInteractionBase> = new Map()
   private readonly running = new Map<SessionId, boolean>()
   private readonly completionUnread = new Set<SessionId>()
+  private readonly completionGates: CompletionGate[] = []
   private statusSnapshot: SessionStatusSnapshot = new Map()
   private readonly statusListeners = new Set<() => void>()
   private mainRetainId: SessionId | undefined
@@ -538,6 +555,32 @@ export class UiSession extends Service {
     this.publishStatus()
   }
 
+  /**
+   * Register one reason to withhold the finished-but-unviewed reminder.
+   *
+   * The status snapshot computes `completionUnread` with every gate applied, so a
+   * Session whose only pending work is a scheduled task keeps its clock mark instead
+   * of the finished dot, and the reminder returns when that work ends.
+   * @param gate - withholding predicate plus its change subscription.
+   * @returns idempotent disposer removing this exact gate.
+   */
+  registerCompletionGate(gate: CompletionGate): () => void {
+    this.completionGates.push(gate)
+    const unsubscribe = gate.subscribe(() => { this.publishStatus() })
+    this.publishStatus()
+    return () => {
+      const index = this.completionGates.indexOf(gate)
+      if (index < 0) return
+      this.completionGates.splice(index, 1)
+      unsubscribe()
+      this.publishStatus()
+    }
+  }
+
+  private withholdCompletion(sessionId: SessionId): boolean {
+    return this.completionGates.some(gate => gate.withheld(sessionId))
+  }
+
   private isMain(sessionId: SessionId): boolean {
     return (this.sessions.list.getSnapshot().byId[sessionId]?.retainedBy.mainView ?? 0) > 0
   }
@@ -554,7 +597,7 @@ export class UiSession extends Service {
       next.set(id, {
         running: this.running.get(id),
         pendingInteraction: this.pendingSnapshot.get(id),
-        completionUnread: this.completionUnread.has(id),
+        completionUnread: this.completionUnread.has(id) && !this.withholdCompletion(id),
       })
     }
     if (sameSessionStatus(this.statusSnapshot, next)) return
