@@ -160,6 +160,7 @@ export function useChatScroll(input: ChatScrollInput): ChatScrollState {
       reading.interruptFollow()
     }
     viewport.updateTurns(loadedTurns)
+    viewport.setTurnRunning(running)
     const layoutChanged = previous.order !== order || previous.isOpen !== isOpen
     const historyConsumed = previous.historyLoadStatus === 'pendingConsumption' && historyLoadStatus === 'idle'
     if (!isOpen || historyLoadStatus === 'error') viewport.cancelHistoryPrepend()

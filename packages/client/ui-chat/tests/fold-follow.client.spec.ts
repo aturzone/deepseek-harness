@@ -48,7 +48,7 @@ function runFrames(): void {
  * Earlier content, one closing row, and later content in a 400px scrollport.
  * @param layout - heights above and below the row and the starting scroll position.
  */
-function fixture(layout: { earlier: number; later: number; top: number; following: boolean }) {
+function fixture(layout: { earlier: number; later: number; top: number; following: boolean; running?: boolean }) {
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
     const id = ++nextFrame
     frames.set(id, callback)
@@ -88,6 +88,7 @@ function fixture(layout: { earlier: number; later: number; top: number; followin
   })
   const viewport = new ChatViewport()
   viewport.attach(list, column)
+  viewport.setTurnRunning(layout.running ?? true)
   const follow = new ScrollFollow(layout.following, 25)
   const reading = new ChatReading(viewport, { read: () => null, save: vi.fn() }, {
     initialized: true, followingTail: layout.following, activeTurn: 1,
@@ -149,6 +150,18 @@ it('lands a following reader at the tail and lets content growth consume the roo
   h.reading.onResize()
   expect(h.list.scrollTop).toBe(720)
   expect(h.follow.animating).toBe(false)
+})
+
+it('releases settled completion room when a following reader realigns to the tail', async () => {
+  // A finished Turn cannot grow into the room kept for its closed rows; a tail alignment removes it.
+  const h = fixture({ ...VISIBLE_ROW, running: false })
+  await h.close()
+  expect(h.spacer.style.height).toBe('400px')
+  expect(h.list.scrollTop).toBe(600)
+  h.reading.onResize()
+  expect(h.spacer.style.height).toBe('')
+  expect(h.list.scrollTop).toBe(200)
+  expect(h.reading.followingTail).toBe(true)
 })
 
 it('adds a reader\'s own scrolling during the fold to the position it keeps still', async () => {
