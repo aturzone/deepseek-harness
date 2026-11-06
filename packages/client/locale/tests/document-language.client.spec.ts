@@ -48,12 +48,15 @@ async function bench(preference?: string) {
 }
 
 const langOf = (): string => document.documentElement.lang
+const dirOf = (): string => document.documentElement.dir
 
 describe('document language', () => {
   beforeEach(() => {
     // The served markup declares the product default; the plugin must not
     // depend on that value already being correct.
     document.documentElement.lang = 'en'
+    // The served markup declares no direction; the plugin states the active one.
+    document.documentElement.dir = ''
     Object.defineProperty(navigator, 'languages', { value: ['zh-CN'], configurable: true })
     Object.defineProperty(navigator, 'language', { value: 'zh-CN', configurable: true })
   })
@@ -96,6 +99,44 @@ describe('document language', () => {
     locale.addLanguage({ id: 'pt-BR', label: 'Português', fallback: 'en' })
     locale.setLocale('pt-BR')
     expect(langOf()).toBe('pt-BR')
+  })
+
+  it('states the shipped languages\' left-to-right direction at activation', async () => {
+    await bench()
+    expect(dirOf()).toBe('ltr')
+  })
+
+  it('follows a right-to-left language pack and restores direction on switch', async () => {
+    const { locale } = await bench()
+    const remove = locale.addLanguage({ id: 'ar', label: 'العربية', fallback: 'en', direction: 'rtl' })
+    try {
+      locale.setLocale('ar')
+      expect(langOf()).toBe('ar')
+      expect(dirOf()).toBe('rtl')
+      locale.setLocale('en')
+      expect(dirOf()).toBe('ltr')
+    } finally {
+      remove()
+    }
+  })
+
+  it('restores direction when the active right-to-left language is unregistered', async () => {
+    const { locale } = await bench()
+    const remove = locale.addLanguage({ id: 'he', label: 'עברית', fallback: 'en', direction: 'rtl' })
+    locale.setLocale('he')
+    expect(dirOf()).toBe('rtl')
+    remove()
+    // The browser's zh preference becomes provisional once the definition is gone.
+    expect(dirOf()).toBe('ltr')
+  })
+
+  it('rejects an unknown writing direction at registration', async () => {
+    const { locale } = await bench()
+    expect(() => locale.addLanguage({
+      id: 'xx', label: 'X', fallback: 'en',
+      // @ts-expect-error - invalid directions are rejected at runtime
+      direction: 'down',
+    })).toThrow('must be "ltr" or "rtl"')
   })
 
   it('does not rewrite the document language for catalog changes with the same active locale', async () => {
