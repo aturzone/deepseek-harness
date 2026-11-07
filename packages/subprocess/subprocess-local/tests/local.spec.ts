@@ -1062,7 +1062,13 @@ describe('LocalSubprocessRuntime', () => {
       const linuxFiber = await linuxContext.plugin(IsolatedLocalSubprocessRuntime)
       fibers.push(linuxFiber)
       const linuxRuntime = linuxContext.subprocess as InstanceType<typeof IsolatedLocalSubprocessRuntime>
-      linuxRuntime.internals = { platform: 'linux' }
+      const linuxRunner: [string, ...string[]] = ['/marker-linux-runner']
+      const resolveLinuxRunner = (): [string, ...string[]] => ['/resolved-linux-runner']
+      const linuxRunnerAvailable = (invocation: readonly string[]): boolean => invocation[0] === '/resolved-linux-runner'
+      linuxRuntime.internals = {
+        platform: 'linux', runnerInvocation: linuxRunner,
+        resolveRunnerInvocation: resolveLinuxRunner, runnerAvailable: linuxRunnerAvailable,
+      }
       const preparationFailure = new Error('spill directory unavailable')
       prepareManagedProcessBinding.mockImplementationOnce(() => { throw preparationFailure })
       expect(() => linuxRuntime.spawn(spec('true'))).toThrow(preparationFailure)
@@ -1074,7 +1080,10 @@ describe('LocalSubprocessRuntime', () => {
       expect(probeLinuxNative).toHaveBeenCalledOnce()
       expect(confirmLinuxManager).toHaveBeenCalledTimes(2)
       expect(launchLinuxScope).toHaveBeenCalledTimes(2)
-      expect(launchLinuxScope).toHaveBeenLastCalledWith(expect.anything(), expect.anything(), [])
+      // The declared runner seam reaches the launch selected on the production path.
+      expect(launchLinuxScope).toHaveBeenLastCalledWith(expect.anything(), expect.anything(), [], {
+        runnerInvocation: linuxRunner, resolveRunnerInvocation: resolveLinuxRunner, runnerAvailable: linuxRunnerAvailable,
+      })
       await linuxRuntime.spawn(spec('true')).done
       expect(confirmLinuxManager).toHaveBeenCalledTimes(3)
       expect(spawnSubprocess).toHaveBeenCalledOnce()
@@ -1084,13 +1093,15 @@ describe('LocalSubprocessRuntime', () => {
       const windowsFiber = await windowsContext.plugin(IsolatedLocalSubprocessRuntime)
       fibers.push(windowsFiber)
       const windowsRuntime = windowsContext.subprocess as InstanceType<typeof IsolatedLocalSubprocessRuntime>
-      windowsRuntime.internals = { platform: 'win32' }
+      const windowsRunner: [string, ...string[]] = ['/marker-windows-runner']
+      windowsRuntime.internals = { platform: 'win32', runnerInvocation: windowsRunner }
       await windowsRuntime.spawn(spec('true')).done
       await new Promise(resolve => setImmediate(resolve))
       await windowsRuntime.spawn(spec('true')).done
       await new Promise(resolve => setImmediate(resolve))
       expect(probeWindowsJob).toHaveBeenCalledTimes(2)
       expect(launchWindowsJob).toHaveBeenCalledTimes(2)
+      expect(launchWindowsJob).toHaveBeenLastCalledWith(expect.anything(), expect.anything(), { runnerInvocation: windowsRunner })
       expect(bindManagedProcess.mock.calls.map(([, launch]) => launch)).toEqual([
         linuxLaunch,
         linuxLaunch,
