@@ -43,9 +43,11 @@ import {
   signalLinuxDirectProcess,
   systemdRunIdentity,
 } from './linux-scope.ts'
+import type { LinuxScopeInternals } from './linux-scope.ts'
 import { LinuxScopeSelector } from './linux-scope-selector.ts'
 import type { LinuxScopeDecision } from './linux-scope-selector.ts'
 import { launchWindowsJob, probeWindowsJob } from './windows-job.ts'
+import type { WindowsJobInternals } from './windows-job.ts'
 import { targetEnvironment } from './runner-launch.ts'
 import { createProcessInspector } from './process-inspector.ts'
 import type { ProcessInspector } from './process-inspector.ts'
@@ -53,6 +55,22 @@ import { LocalTerminalHandle } from './terminal.ts'
 import { prepareShellActivity } from './shell-activity.ts'
 
 const requireNodePty = createLazyRequire<typeof NodePty>('node-pty', import.meta.url)
+
+/** Ordinary-spawn hooks plus the managed-launch runner seams; the latter reach the selected launch. */
+export type LocalSubprocessInternals = SpawnInternals
+  & Pick<WindowsJobInternals, 'runnerInvocation' | 'resolveRunnerInvocation' | 'runnerAvailable'>
+  & Pick<LinuxScopeInternals, 'runnerInvocation' | 'resolveRunnerInvocation' | 'runnerAvailable'>
+
+/** Lift the managed-launch runner seams from the runtime internals, omitting absent entries. */
+function managedRunnerSeams(
+  internals: LocalSubprocessInternals,
+): Pick<WindowsJobInternals, 'runnerInvocation' | 'resolveRunnerInvocation' | 'runnerAvailable'> {
+  return {
+    ...internals.runnerInvocation === undefined ? {} : { runnerInvocation: internals.runnerInvocation },
+    ...internals.resolveRunnerInvocation === undefined ? {} : { resolveRunnerInvocation: internals.resolveRunnerInvocation },
+    ...internals.runnerAvailable === undefined ? {} : { runnerAvailable: internals.runnerAvailable },
+  }
+}
 
 /**
  * Local subprocess service: platform-selected managed ranges, Node-shaped stdio
@@ -69,7 +87,7 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
   /** Caller endpoints retained until close, independently of managed process lifetime. */
   private controlChannels = new Set<Duplex>()
   /** Test hook: process, spill, and platform operations forwarded to spawnSubprocess. */
-  internals: SpawnInternals = {}
+  internals: LocalSubprocessInternals = {}
   /** Provider-lifetime latch suppressing repeated weaker-containment warnings. */
   private fallbackWarningIssued = false
   /**
@@ -199,15 +217,16 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
     const env = targetEnvironment(spec)
     const containmentMode = this.selectContainmentMode('ordinary')
     let handle: LocalSubprocessHandle
-    const internals: SpawnInternals = { ...this.internals, onSpillFailure: this.reportSpillFailure }
+    const internals: LocalSubprocessInternals = { ...this.internals, onSpillFailure: this.reportSpillFailure }
     if (containmentMode === 'fallback') {
       handle = spawnSubprocess(spec, internals)
     } else {
       const binding = prepareManagedProcessBinding(internals)
       const linuxScope = containmentMode === 'linux-scope' ? this.linuxScopeDecision : undefined
+      const seams = managedRunnerSeams(internals)
       const launch = linuxScope === undefined
-        ? launchWindowsJob(spec, env)
-        : launchLinuxScope(spec, env, linuxScope.literalArgv)
+        ? launchWindowsJob(spec, env, seams)
+        : launchLinuxScope(spec, env, linuxScope.literalArgv, seams)
       handle = bindManagedProcess(spec, launch, binding)
       if (linuxScope !== undefined) this.watchLinuxScopeStart(handle.done, linuxScope.generation)
     }
