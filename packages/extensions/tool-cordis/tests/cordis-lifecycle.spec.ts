@@ -158,6 +158,25 @@ describe('Cordis effect ownership', () => {
     expect(applyCalls).toBe(1)
     expect(fiber.state).toBe(FiberState.ACTIVE)
   })
+
+  it('reports an un-awaited async effect setup rejection and removes the failed effect', async () => {
+    const ctx = new Context()
+    const errors: unknown[] = []
+    ctx.logger.error = ((error: unknown) => { errors.push(error) }) as typeof ctx.logger.error
+    const failure = new Error('effect setup failed')
+
+    const fiber = await ctx.plugin({
+      name: 'failing-effect',
+      apply(owner) {
+        owner.effect(async () => { throw failure }, 'failing-setup')
+      },
+    })
+    await Promise.resolve()
+
+    expect(errors).toEqual([failure])
+    expect(fiber.state).toBe(FiberState.ACTIVE)
+    expect(fiber.getEffects()).toEqual([])
+  })
 })
 
 describe('Cordis child publication ownership', () => {

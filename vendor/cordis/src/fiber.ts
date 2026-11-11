@@ -569,9 +569,13 @@ export class Fiber {
     }
 
     // prevent unhandled rejection — both from `task` itself and from the
-    // disposer chain if it fails to settle cleanly.
-    task?.catch(() => {
+    // disposer chain if it fails to settle cleanly. While the effect is still
+    // live, no owner has taken responsibility for the rejection, so report it
+    // before disposing rather than leaving the plugin ACTIVE with no
+    // diagnostic. A caller that awaits the effect sees the same error again.
+    task?.catch((reason) => {
       if (!runner.epoch) return dispose()
+      this.ctx.logger.error(reason)
       return finalizeDisposal(dispose)
     }).catch((error) => this.ctx.logger.error(error))
 
