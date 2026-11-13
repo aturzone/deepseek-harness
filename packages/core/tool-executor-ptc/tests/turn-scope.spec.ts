@@ -107,4 +107,35 @@ describe('Session turn scope for PTC dispatch records', () => {
       content: [{ type: 'text', text: 'ok' }],
     })).not.toThrow()
   })
+  it('rejects a turn-scoped batch member appended after the turn closed', () => {
+    const session = Session.create(SessionId('turn-scope-batch-closed'))
+    session.append('turn/start', { turn: 1 })
+    session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+    const committedSeq = session.seq
+
+    expect(() => session.append([
+      ['tool/ptc-dispatch-start', dispatchStart()],
+    ])).toThrow(SessionTurnScopeError)
+    expect(session.seq).toBe(committedSeq)
+  })
+
+  it('applies a batch open-turn transition to the members after it', () => {
+    const session = Session.create(SessionId('turn-scope-batch-open'))
+    const events = session.append([
+      ['turn/start', { turn: 1 }],
+      ['tool/ptc-dispatch-start', dispatchStart()],
+    ])
+    expect(events.map(event => event.type)).toEqual(['turn/start', 'tool/ptc-dispatch-start'])
+
+    // A batch that closes the turn makes the following turn-scoped member illegal.
+    expect(() => session.append([
+      ['turn/end', { turn: 1, reason: { kind: 'completed' } }],
+      ['tool/ptc-dispatch-start', dispatchStart()],
+    ])).toThrow(SessionTurnScopeError)
+    // The rejected batch committed nothing, so the log ends with the first batch.
+    expect(session.snapshotEvents().map(event => event.type)).toEqual([
+      'turn/start', 'tool/ptc-dispatch-start',
+    ])
+  })
+
 })

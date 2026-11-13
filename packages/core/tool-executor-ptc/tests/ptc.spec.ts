@@ -1110,14 +1110,14 @@ describe('the sub-dispatch scheduler (native concurrency contract)', () => {
   it('drops a queued dispatch whose turn closed before it started', async () => {
     const { ctx, runtime } = await setup({ mode: 'ptc' })
     registerEcho(ctx)
-    const session = Session.create(SessionId('ptc-closed-before-start'))
+    const session = Session.create(brandString<SessionId>('ptc-closed-before-start'))
     session.append('turn/start', { turn: 1 })
     const agent = { ctx, session } as Agent
     runtime.behavior = async (request) => {
       // The owning turn closes while the run is in flight (agent-loop finally).
       session.append('turn/end', { turn: 1, reason: { kind: 'aborted', reason: { kind: 'user' } } })
       const value = await request.bindings[0]!.functions.echo!({ value: 'late' })
-      return { logs: [], value }
+      return printed(value)
     }
 
     const result = await runCode(ctx, 'return await tools.echo({ value: "late" })', { agent })
@@ -1133,7 +1133,7 @@ describe('the sub-dispatch scheduler (native concurrency contract)', () => {
   it('drops a settle whose turn closed while its log task was pending', async () => {
     const { ctx, runtime } = await setup({ mode: 'ptc' })
     registerEcho(ctx)
-    const session = Session.create(SessionId('ptc-closed-before-settle'))
+    const session = Session.create(brandString<SessionId>('ptc-closed-before-settle'))
     session.append('turn/start', { turn: 1 })
     const agent = { ctx, session } as Agent
     runtime.behavior = async (request) => {
@@ -1141,7 +1141,7 @@ describe('the sub-dispatch scheduler (native concurrency contract)', () => {
       // The turn closes after the sub-call resolved but before its tracked
       // settle append runs.
       session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
-      return { logs: [], value }
+      return printed(value)
     }
 
     const result = await runCode(ctx, 'return await tools.echo({ value: "early" })', { agent })

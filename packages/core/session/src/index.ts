@@ -975,6 +975,7 @@ export class Session {
       }
     }
     return events
+  }
 
   /**
    * Refuse a turn-scoped append when the log has no open turn.
@@ -993,7 +994,6 @@ export class Session {
   private trackTurn(event: SessionEvent): void {
     if (event.type === 'turn/start') this.openTurn = true
     else if (event.type === 'turn/end') this.openTurn = false
-  }
   }
 
   static {
