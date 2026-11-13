@@ -159,3 +159,41 @@ it('retains reminders after a stream ends, replaces the reconnect baseline, and 
   await expect(status.mark(parentId, false)).rejects.toThrow('Reload the page')
   expect(report).toHaveBeenCalledWith(expect.stringContaining('Reminders could not be synchronized'), expect.any(Error))
 })
+
+it('lets a completion gate withhold and then restore the finished reminder', async ({ mock, start }) => {
+  const record = (turn: number, readTurn: number) => ({
+    sessionId: parentId, completedTurn: turn, failed: false, readTurn, manualUnread: false,
+  })
+  mock.remote.session.list.mockResolvedValue(ok({ items: [{
+    sessionId: parentId, updatedAt: 1, running: false, blank: false, agentAvailable: true,
+  }] }))
+  mock.stream('sessionStatus/follow', (_request, stream) => {
+    stream.push({ type: 'baseline', items: [record(1, 0)] })
+  })
+  const client = await start()
+  const status = () => client.ctx.uiSession.sessionStatus.getSnapshot().get(parentId)
+  await client.ctx.sessions.refresh()
+  await vi.waitFor(() => { expect(status()).toMatchObject({ completionUnread: true }) })
+
+  let withheld = true
+  let notify = (): void => {}
+  const dispose = client.ctx.uiSession.sessionStatus.registerCompletionGate({
+    withheld: () => withheld,
+    subscribe: (listener) => { notify = listener; return () => { notify = () => {} } },
+  })
+  await client.flush()
+  // The stop happened while the gate withholds the reminder.
+  expect(status()).toMatchObject({ completionUnread: false })
+
+  withheld = false
+  notify()
+  await client.flush()
+  // The reminder returns as soon as the gate releases it, without another turn.
+  expect(status()).toMatchObject({ completionUnread: true })
+
+  // The disposer is idempotent.
+  dispose()
+  dispose()
+  await client.flush()
+  expect(status()).toMatchObject({ completionUnread: true })
+})

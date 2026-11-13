@@ -7,7 +7,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { installReading } from './read.ts'
 import { UiSessionStatus } from './status.ts'
 
-export type { SessionStatus, SessionStatusSnapshot, UiSessionStatus, UseSessionStatus } from './status.ts'
+export type { CompletionGate, SessionStatus, SessionStatusSnapshot, UiSessionStatus, UseSessionStatus } from './status.ts'
 
 /** Required Controller, Remote, generated reading namespace, access, renderer, and Session UI services. */
 export const inject = ['remote', 'remote.sessionStatus', 'remoteAccess', 'sessions', 'slots', 'uiSession']

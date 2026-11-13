@@ -27,6 +27,22 @@ export interface SessionStatus {
   readonly completionFailed: boolean
 }
 
+/** A plugin-owned reason to withhold the finished-but-unviewed reminder for some Sessions. */
+export interface CompletionGate {
+  /**
+   * Whether this source currently withholds the reminder for one Session.
+   * @param sessionId - Session whose row may show the finished reminder.
+   * @returns true while the reminder would misrepresent pending work.
+   */
+  withheld(sessionId: SessionId): boolean
+  /**
+   * Observe the facts behind {@link CompletionGate.withheld}.
+   * @param listener - called when withholding may have changed.
+   * @returns unsubscribe callback.
+   */
+  subscribe(listener: () => void): () => void
+}
+
 /** Current UI status indexed by Session identity. */
 export type SessionStatusSnapshot = ReadonlyMap<SessionId, SessionStatus>
 /** Selector hook over the unified Session UI status snapshot. */
@@ -52,6 +68,7 @@ declare module '@deepseek-ai/dsh-client-ui-session/client' {
  */
 export class UiSessionStatus extends Service implements HostObservable<SessionStatusSnapshot> {
   private readonly running = new Map<SessionId, boolean>()
+  private readonly completionGates: CompletionGate[] = []
   private statusSnapshot: SessionStatusSnapshot = new Map()
   private viewedBinding: SessionBinding | undefined
   private viewedOpenState: string | undefined
@@ -128,6 +145,31 @@ export class UiSessionStatus extends Service implements HostObservable<SessionSt
     await this.reading.mark(sessionId, unread)
   }
 
+  /**
+   * Register one reason to withhold the finished-but-unviewed reminder.
+   *
+   * The status snapshot computes `completionUnread` with every gate applied, so a Session whose only pending work is a
+   * scheduled task keeps its clock mark instead of the finished dot, and the reminder returns when that work ends.
+   * @param gate - withholding predicate plus its change subscription.
+   * @returns idempotent disposer removing this exact gate.
+   */
+  registerCompletionGate(gate: CompletionGate): () => void {
+    this.completionGates.push(gate)
+    const unsubscribe = gate.subscribe(() => { this.publishStatus() })
+    this.publishStatus()
+    return () => {
+      const index = this.completionGates.indexOf(gate)
+      if (index < 0) return
+      this.completionGates.splice(index, 1)
+      unsubscribe()
+      this.publishStatus()
+    }
+  }
+
+  private withholdCompletion(sessionId: SessionId): boolean {
+    return this.completionGates.some(gate => gate.withheld(sessionId))
+  }
+
   private observeRunning(sessionId: SessionId, running: boolean): void {
     this.running.set(sessionId, running)
     this.publishStatus()
@@ -187,11 +229,12 @@ export class UiSessionStatus extends Service implements HostObservable<SessionSt
       const record = reading[id]
       const unread = record !== undefined
         && (record.manualUnread || (id !== viewing && record.completedTurn > record.readTurn))
+      const withheld = unread && this.withholdCompletion(id)
       next.set(id, {
         running: this.running.get(id),
         pendingInteraction: pending.get(id),
-        completionUnread: unread,
-        completionFailed: unread && record.failed,
+        completionUnread: unread && !withheld,
+        completionFailed: unread && !withheld && record.failed,
       })
     }
     if (sameSessionStatus(this.statusSnapshot, next)) return

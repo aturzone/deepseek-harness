@@ -51,6 +51,9 @@
       "path": "../ui-session"
     },
     {
+      "path": "../ui-session-status/tsconfig.client.json"
+    },
+    {
       "path": "../ui-slots"
     },
     {

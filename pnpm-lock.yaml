@@ -5779,6 +5779,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-session':
         specifier: workspace:*
         version: link:../ui-session
+      '@deepseek-ai/dsh-client-ui-session-status':
+        specifier: workspace:*
+        version: link:../ui-session-status
       '@deepseek-ai/dsh-client-ui-sidebar':
         specifier: workspace:*
         version: link:../ui-sidebar
