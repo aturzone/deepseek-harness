@@ -46,8 +46,8 @@
   /* The base .tableScroll caps at the column (max-width: 100%); the breakout
      is exactly the case that must exceed it. */
   max-width: none;
-  margin-left: calc(-1 * var(--dsh-table-lead));
-  padding-left: var(--dsh-table-lead);
+  margin-inline-start: calc(-1 * var(--dsh-table-lead));
+  padding-inline-start: var(--dsh-table-lead);
 }
 
 /* Only the painted table outranks Conversation's z-index 0 width handle. The
@@ -84,5 +84,5 @@
 .actions {
   margin-top: 16px;
   /* Optical align with the 28px action hit targets. */
-  margin-left: -6px;
+  margin-inline-start: -6px;
 }

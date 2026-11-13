@@ -19,7 +19,7 @@
   color: var(--dsw-alias-label-tertiary);
   transition: color 100ms ease;
   font: inherit;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 @media (hover: hover) {
@@ -38,7 +38,7 @@
   overflow-wrap: anywhere;
 }
 .title { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: var(--dsh-content-font-size, 14px); }
-.time { flex: none; margin-left: auto; color: inherit; font: var(--dsw-font-xxs-12); }
+.time { flex: none; margin-inline-start: auto; color: inherit; font: var(--dsw-font-xxs-12); }
 .chevron, .openChevron { flex: none; color: inherit; }
 .openChevron { transform: rotate(180deg); }
 .body { padding: 0 16px 12px 40px; }

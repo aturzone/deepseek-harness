@@ -249,8 +249,8 @@
 .runningDivider {
   position: absolute;
   top: -4px;
-  left: 0;
-  right: 0;
+  inset-inline-start: 0;
+  inset-inline-end: 0;
   height: 0.5px;
   background: color-mix(in srgb, var(--dsw-alias-border-l1) 75%, var(--dsw-alias-border-l2));
   opacity: 0;
@@ -358,9 +358,9 @@
    anchors them to its frame; the shared host supplies the sticky scrollport. */
 .toBottomSlot {
   position: absolute;
-  right: 0;
+  inset-inline-end: 0;
   bottom: 16px;
-  left: 0;
+  inset-inline-start: 0;
   /* Above transcript sticky chrome (CodeBlock banners 6, the pinned compaction
      header and turn rail 7) and below the composer seat (9, ui-conversation
      ConversationRoot), so menus the composer opens upward cover this control.
@@ -369,7 +369,7 @@
   height: 0;
   display: flex;
   justify-content: flex-end;
-  padding-right: max(
+  padding-inline-end: max(
     calc(var(--dsh-composer-side-clearance) + 16px),
     calc((100% - var(--dsh-chat-content-width)) / 2)
   );

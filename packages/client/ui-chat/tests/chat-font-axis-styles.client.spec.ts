@@ -137,7 +137,7 @@ describe('chat flow font-size axis', () => {
     expect(narrow).toMatch(/\.trigger \{[^}]*width: calc\(28px \+ var\(--dsh-content-font-delta, 0px\)\)/)
     expect(narrow).toMatch(/\.trigger \{[^}]*padding: 6px/)
     expect(narrow).toMatch(/\.trigger \.label \{[^}]*display: none/)
-    expect(narrow).toMatch(/\.root \+ \.root \{[^}]*margin-left: 0/)
+    expect(narrow).toMatch(/\.root \+ \.root \{[^}]*margin-inline-start: 0/)
   })
 
   it('non-latest turn tails hide the whole actions row until hover or focus', () => {
