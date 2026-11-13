@@ -19,7 +19,7 @@ function declarationsOf(selector: string): string[] {
 describe('Chat aside layer', () => {
   it('spans the frame at zero height and passes pointer events through', () => {
     expect(declarationsOf('.asideSlot')).toEqual(expect.arrayContaining([
-      'position: absolute', 'right: 0', 'left: 0', 'height: 0', 'pointer-events: none',
+      'position: absolute', 'inset-inline-end: 0', 'inset-inline-start: 0', 'height: 0', 'pointer-events: none',
     ]))
   })
 

@@ -15,7 +15,7 @@
   font-size: var(--dsh-content-font-size, 14px);
   /* One process-row height, so a header fills the slot the running status keeps for it. */
   line-height: calc(24px + var(--dsh-content-font-delta, 0px));
-  text-align: left;
+  text-align: start;
   cursor: pointer;
   transition: color 100ms ease;
 }
