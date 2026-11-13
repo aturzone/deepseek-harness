@@ -33,6 +33,7 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
+import type {} from '@deepseek-ai/dsh-client-ui-session-status/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {} from '@deepseek-ai/dsh-client-ui-tool/client'
@@ -77,7 +78,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /** Required services for catalogs, ambient Session marks, the right Sidebar, Remote queries, linked-Session navigation, and access. */
 export const inject = [
-  'slots', 'locale', 'remote', 'remote.schedule', 'conversation', 'uiConversation', 'uiWorkspace', 'sessions',
+  'slots', 'locale', 'remote', 'remote.schedule', 'conversation', 'uiConversation', 'uiWorkspace', 'uiSession', 'sessions',
   'workspaces', 'sidebarRightTabs', 'sidebarRight', 'remoteAccess',
 ]
 
@@ -133,6 +134,17 @@ export function apply(ctx: ClientContext): void {
       subscribeChanged: listener => ctx.remote.$on('schedule/changed', listener),
       subscribeReset: listener => ctx.on('connection/reset', listener),
     })
+    // A planned task keeps the Session row on its clock mark instead of the finished dot: the dot would claim the
+    // work is done while the timer still owns a wakeup.
+    ctx.effect(() => ctx.uiSession.sessionStatus.registerCompletionGate({
+      withheld: (sessionId) => {
+        const snapshot = manager.hooks.catalog.getSnapshot()
+        if (!snapshot.settled || snapshot.status !== 'ready') return false
+        return snapshot.records.some(record => record.status === 'active'
+          && 'sessionId' in record.target && record.target.sessionId === sessionId)
+      },
+      subscribe: listener => manager.hooks.catalog.subscribe(listener),
+    }), 'ui-schedule: completion gate')
     // One outcome store behind one `shell.overlay` entry announces every deletion
     // this plugin's surfaces settle, so the notice outlives the panel, popover, or
     // tab the deletion started in.
