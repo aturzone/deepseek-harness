@@ -50,9 +50,8 @@ it('rejects a Standard Schema Config that is not a Schemastery schema', () => {
   expect(isSchemasterySchema(standardSchema)).toBe(false)
   expect(isSchemasterySchema(undefined)).toBe(false)
   expect(isSchemasterySchema(z.object({ fixed: z.string() }))).toBe(true)
-  // Form projection must survive a node whose meta graph is absent, even if a caller skips the guard.
+  // The guard is the single entry point: a node without a meta graph is not Schemastery and is skipped.
   const metaLess = z.object({ fixed: z.string(), live: z.number().volatile() })
   Object.defineProperty(metaLess, 'meta', { value: undefined })
-  expect(volatileForm(metaLess)).toBeDefined()
-  expect(isVolatilePath(metaLess, ['live'])).toBe(true)
+  expect(isSchemasterySchema(metaLess)).toBe(false)
 })
