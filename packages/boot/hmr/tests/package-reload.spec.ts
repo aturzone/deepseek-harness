@@ -1019,6 +1019,21 @@ it('removes a plugin whose replacement fails to load without reporting the failu
   expect(f.trace).toEqual(['stop:1'])
 })
 
+it('replaces changed plugins beside CommonJS cache children without a filename', async () => {
+  const f = await fixture()
+  const require = createRequire(import.meta.url)
+  const planted = join(f.dir, 'planted.cjs')
+  // Libraries can plant entries in require.cache whose children are not Node modules.
+  const plantedModule = { exports: {}, children: [] as NodeJS.Module[] } as NodeJS.Module
+  Reflect.set(plantedModule, 'children', [{ id: 'cache-child-without-filename' }])
+  require.cache[planted] = plantedModule
+  onTestFinished(() => { Reflect.deleteProperty(require.cache, planted) })
+  f.trace.length = 0
+  addon(f.dir, '2')
+  await expect(f.reconcile()).resolves.toEqual({ warnings: [], pending: [] })
+  expect(f.trace).toEqual(['stop:1', 'start:2:1:-'])
+})
+
 it('replaces changed plugins beside CommonJS cache entries that are not Node modules', async () => {
   const f = await fixture()
   const require = createRequire(import.meta.url)
