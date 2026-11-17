@@ -811,7 +811,12 @@ class Hmr extends Service {
       /* v8 ignore next -- Node stores no undefined values in require.cache; the index type admits them */
       const children: unknown = module === undefined ? undefined : Reflect.get(module, 'children')
       if (!Array.isArray(children)) continue
-      for (const child of children as NodeJS.Module[]) add(pathToFileURL(filename).href, pathToFileURL(child.filename).href)
+      // `require.cache` is writable by arbitrary code, so a child can be neither a module nor carry a filename.
+      for (const child of children as (object | null | undefined)[]) {
+        const childFilename: unknown = child === null || child === undefined ? undefined : Reflect.get(child, 'filename')
+        if (typeof childFilename !== 'string') continue
+        add(pathToFileURL(filename).href, pathToFileURL(childFilename).href)
+      }
     }
     return importers
   }
