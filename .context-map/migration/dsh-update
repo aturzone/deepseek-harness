@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# dsh-update — update the globally installed DeepSeek Harness CLI.
+# Usage: dsh-update [--check]
+set -euo pipefail
+PKG="@deepseek-ai/dsh"
+REGISTRY="${DSH_UPDATE_REGISTRY:-https://registry.npmjs.org/}"
+current="$(dsh --version 2>/dev/null | head -1 || true)"
+latest="$(npm view "$PKG" version --registry "$REGISTRY" 2>/dev/null || true)"
+printf 'installed: %s\nlatest:    %s\n' "${current:-unknown}" "${latest:-unknown}"
+if [ "${1:-}" = "--check" ]; then
+  [ "$current" = "$latest" ] && exit 0 || exit 1
+fi
+if [ -z "$latest" ]; then
+  echo "dsh-update: could not read the latest version from $REGISTRY" >&2
+  exit 1
+fi
+if [ "$current" = "$latest" ]; then
+  echo "dsh-update: already up to date"
+  exit 0
+fi
+echo "dsh-update: installing $PKG@$latest ..."
+npm install -g "$PKG@$latest" --registry "$REGISTRY"
+echo "dsh-update: now $(dsh --version 2>&1 | head -1)"
+echo "dsh-update: restart any running 'dsh web' process to load the new version."
