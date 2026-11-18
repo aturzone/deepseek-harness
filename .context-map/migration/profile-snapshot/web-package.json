@@ -1,0 +1,26 @@
+{
+  "name": "dsh-profile-web",
+  "private": true,
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "@deepseek-ai/dsh-base",
+        "@deepseek-ai/dsh-web-app",
+        "@deepseek-ai/dsh-experimental-inspector-profile",
+        "@deepseek-ai/dsh-experimental-tool-worktree",
+        "@deepseek-ai/dsh-experimental-terminal-bundle",
+        "@deepseek-ai/dsh-experimental-session-search",
+        "@deepseek-ai/dsh-subagent-claude-code",
+        "@deepseek-ai/dsh-experimental-auto-review",
+        "@deepseek-ai/dsh-experimental-forge-bundle",
+        "@deepseek-ai/dsh-personalized-recommendations",
+        "@deepseek-ai/dsh-experimental-plugin-market-bundle",
+        "dsh-our-free-model"
+      ]
+    }
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-subagent-claude-code": "0.2.2-rc.3",
+    "dsh-our-free-model": "file:/home/atur/.dsh/profiles/web/vendor/dsh-our-free-model-2.8.5.tgz"
+  }
+}
