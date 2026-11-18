@@ -97,3 +97,11 @@ The cookie-overflow fix shipped in rc.2/rc.3 (`5868dbc357`, `93bef27ec7`); the d
   with `Authorization: bearer $(gh auth token)` worked.
 - Repo-wide `pnpm run typecheck` did not finish in 25 minutes on this host (host + client compilers passed); use
   `NODE_OPTIONS=--max-old-space-size=8192`, `DSH_GATE_CONCURRENCY=1`, and focused `tsc -b <package>` for branch work.
+
+## Host profile snapshot
+
+`profile-snapshot/` keeps the old host's user-owned DSH configuration (no credentials): the home `cordis.patch.yml`,
+`profiles/web/cordis.patch.yml` (public URL, trusted hosts, connection cookie settings, OpenCode Go provider
+reference by env name), `profiles/web/cordis.yml` and the profile `package.json` (bundle list). After reinstalling on
+Debian 13, compare these with the generated profile and copy back the user-owned rows; do not copy
+`~/.dsh/.credentials.yaml` (secrets stay in the vault).

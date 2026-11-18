@@ -1,0 +1,28 @@
+# Machine-wide DSH loader patch layer — added 2026-11-07 by atur's brain bootstrap.
+# Registers the brain MCP server (memory/history tools) for every DSH profile.
+#
+# Rollback: delete this file (or remove the `mcp-brain` insert row) and restart the
+# DSH host. A backup of the pre-existing state: /home/atur/.dsh/cordis.patch.yml.bak-*
+# (none existed before this file was created).
+#
+# Verified with: dsh --profile web --dump-config  (row id: mcp-brain)
+# Brain server: /home/atur/brain/tools/brain/mcp_server.py via `brain mcp`
+# Docs: /home/atur/brain/integrations/mcp/brain-mcp.md, /home/atur/brain/docs/WIRING.md
+
+- insert:
+    - id: mcp-brain
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: brain
+        transport: stdio
+        command: /home/atur/brain/bin/brain
+        args: [mcp]
+        cwd: /home/atur/brain
+        env: {}
+        toolCallTimeoutMs: 60000
+        failOnStartupError: false
+        reconnect:
+          enabled: true
+          initialDelayMs: 500
+          maxDelayMs: 30000
+          maxAttempts: 10
