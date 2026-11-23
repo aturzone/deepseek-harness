@@ -174,7 +174,7 @@ export interface PiAiProviderProfile {
   timeoutMs?: number
   /** WebSocket connection timeout in milliseconds. */
   websocketConnectTimeoutMs?: number
-  /** Maximum provider idle time while one stream read is outstanding. */
+  /** Maximum time without response bytes while one stream read is outstanding; provider keepalive frames count as response bytes. */
   streamIdleTimeoutMs?: number
   /**
    * Maximum base64-encoded image payload per request. When a request's

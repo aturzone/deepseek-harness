@@ -23,6 +23,7 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 afterEach(async () => {
   vi.useRealTimers()
   vi.unstubAllEnvs()
+  vi.unstubAllGlobals()
   await closeMockServers()
 })
 
@@ -545,6 +546,50 @@ describe('PiAiAdapter provider routing', () => {
 
     expect(server.paths).toEqual(['/chat/completions'])
     expect(server.closedResponses).toBe(1)
+  })
+
+  it('rearms the idle watchdog on SSE comment keepalives that carry no event', async () => {
+    // llama.cpp heartbeats a long prefill with `: ...` SSE comment frames and
+    // sends no data event until the first token. Comment frames parse to no
+    // stream event, so only transport activity can prove the connection alive.
+    // The body is a test-driven stream: no socket or wall-clock timing decides.
+    const opened = Promise.withResolvers<ReadableStreamDefaultController<Uint8Array>>()
+    vi.stubGlobal('fetch', () => Promise.resolve(new Response(new ReadableStream<Uint8Array>({
+      start(stream): void {
+        opened.resolve(stream)
+      },
+    }), { headers: { 'content-type': 'text/event-stream' } })))
+    const ctx = await harness('http://127.0.0.1:1', { streamIdleTimeoutMs: 100 })
+    const controller = new AbortController()
+    onTestFinished(async () => {
+      controller.abort()
+      await ctx.fiber.dispose()
+    })
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+
+    const pending = assemble(ctx, { model: 'deepseek-flash', messages: [], signal: controller.signal })
+    const body = await opened.promise
+    const encoder = new TextEncoder()
+    // A closed body is the expired watchdog's kill: the SDK released the
+    // response before the first text frame.
+    const alive = (): boolean => body.desiredSize !== null && body.desiredSize > 0
+    // Keepalives land every 80ms, under the 100ms idle timeout; without a
+    // transport pulse the watchdog expires at 100ms, before any text frame.
+    for (let index = 0; index < 3 && alive(); index++) {
+      await vi.advanceTimersByTimeAsync(80)
+      if (!alive()) break
+      body.enqueue(encoder.encode(': keepalive\n\n'))
+    }
+    if (alive()) {
+      for (const event of textEvents) body.enqueue(encoder.encode(`data: ${event}\n\n`))
+      body.close()
+    }
+    await vi.advanceTimersByTimeAsync(0)
+    vi.useRealTimers()
+
+    const result = await pending
+    expect(result.finish).toEqual({ kind: 'stop' })
+    expect(result.message.content).toEqual([{ type: 'text', text: 'hello' }])
   })
 })
 

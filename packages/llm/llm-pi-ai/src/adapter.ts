@@ -30,6 +30,7 @@ import type {
   Api,
   AuthContext,
   CredentialStore,
+  FetchFunction,
   Model,
   Models,
   ModelThinkingLevel,
@@ -58,6 +59,7 @@ import type {
 import type { AttachmentStore, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { idleWatchdog, timeoutOf } from '@deepseek-ai/dsh-timeout'
+import type { IdleWatchdog } from '@deepseek-ai/dsh-timeout'
 import type { ResolvedPiAiProviderProfile } from './config.ts'
 import { requestImageTarget, toPiContext } from './context.ts'
 import { resolveImageRequestBudget } from './image-policy.ts'
@@ -163,6 +165,53 @@ function profileOptions(
     ...profile.websocketConnectTimeoutMs === undefined ? {} : { websocketConnectTimeoutMs: profile.websocketConnectTimeoutMs },
     // The agent recovery layer owns visible attempts; one adapter call is one SDK attempt.
     maxRetries: 0,
+  }
+}
+
+/** pi-ai API routes whose client rejects a custom `fetch`; their requests stay unwrapped. */
+const APIS_REJECTING_CUSTOM_FETCH: ReadonlySet<string> = new Set(['google-generative-ai', 'google-vertex'])
+
+/**
+ * Wrap `fetch` so every response-body byte rearms the idle watchdog before
+ * pi-ai parses the stream. Providers such as llama.cpp heartbeat a long
+ * prefill with SSE comment frames that parse to no stream event, and an
+ * un-pulsed watchdog would abort a connection that is demonstrably alive.
+ * The wrapper is transport-only: status, headers, and bytes pass through
+ * unchanged, and aborting the passed-through `signal` still settles the read.
+ * Routes in `APIS_REJECTING_CUSTOM_FETCH` keep event-only rearming.
+ * @param watchdog - the watchdog of the one stream call issuing this request.
+ * @returns a fetch implementation for pi-ai's `fetch` request option.
+ */
+function livenessFetch(watchdog: IdleWatchdog): FetchFunction {
+  return async (input, init) => {
+    const response = await globalThis.fetch(input, init)
+    const body = response.body
+    /* v8 ignore next -- a streaming provider response always carries a body; a bodyless one passes through */
+    if (body === null) return response
+    const reader = body.getReader()
+    return new Response(
+      new ReadableStream<Uint8Array>({
+        async pull(controller): Promise<void> {
+          try {
+            const chunk = await reader.read()
+            if (chunk.done) {
+              controller.close()
+              return
+            }
+            watchdog.pulse()
+            controller.enqueue(chunk.value)
+          } catch (error: unknown) {
+            controller.error(error)
+          }
+        },
+        cancel(reason): void {
+          // Releasing the consumer side ends the request; the source read is
+          // abandoned, and the call's own signal owns upstream termination.
+          void reader.cancel(reason).catch(() => {})
+        },
+      }),
+      { status: response.status, statusText: response.statusText, headers: response.headers },
+    )
   }
 }
 
@@ -472,6 +521,7 @@ export class PiAiAdapter extends LlmAdapter {
       })
       const events = snapshot.models.streamSimple(model, context, {
         ...profileOptions(profile, reasoning, apiKey),
+        ...APIS_REJECTING_CUSTOM_FETCH.has(model.api) ? {} : { fetch: livenessFetch(watchdog) },
         ...options.temperature === undefined ? {} : { temperature: options.temperature },
         ...options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens },
         ...options.sessionId === undefined ? {} : { sessionId: String(options.sessionId) },
