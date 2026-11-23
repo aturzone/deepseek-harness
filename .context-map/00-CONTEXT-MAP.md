@@ -65,21 +65,27 @@ Other high-value roots: `docs/` (architecture, subsystems, cookbook, user guides
 source + sync manifest), `python/` (SDK + runtime wheel), `native/` (Landlock launcher), `snapshots/` (recorded
 session replay), `benchmarks/` (perf gates), `website/` (VitePress projection of `docs/`).
 
-## 5. Build & run (this machine)
+## 5. Build & run (Debian 13 host `Sebastian`, since 2026-11-23)
 
-Toolchain is workspace-local (repo requires Node ≥ 24.9; system Node is 22):
+Machine Node **v24.22.3** (nvm) satisfies the repo engine floor (`^24.22.3`); pnpm **11.28.5** is
+installed workspace-local under `.tools/pnpm-tool`. The DSH file sandbox allows writes only under
+the workspace, so every cache, store, XDG dir, and `DSH_HOME` lives in `.tools/` (`env.sh` exports
+them; `.tools/npmrc` overrides the retired `~/.npmrc` proxy). Details:
+`migration/DEBIAN-WORKSPACE-2026-11-23.md`.
 
 ```sh
-source .tools/env.sh           # Node 24.22.2 + pnpm 11.28.5 + local caches + DSH_HOME
+source .tools/env.sh           # Node 24.22.3 + workspace-local pnpm 11.28.5 + caches
 
+node scripts/install-lefthook.mjs   # hooks (postinstall is skipped under CI=true)
 pnpm run build                 # tsc lib/types + tsdown host/client + web dist
 pnpm dsh web --no-open         # run the Web GUI from source-built artifacts
 pnpm run test                  # unit tests (per-file 100% coverage is the CI gate: test:coverage)
-pnpm run typecheck             # host+client aggregates; setup is "complete" when this passes
+pnpm run typecheck             # 5 gates; measured 157 s on this host (2026-11-23)
 pnpm run doc-sync              # documentation gates
 ```
 
-`.tools/` and `default-workspace/` are excluded via `.git/info/exclude`; they never appear in `git status`.
+`.tools/` is gitignored; agent worktrees live under the gitignored `.worktrees/` directory
+(`.worktrees/context-map` carries this file on branch `meta/context-map`).
 
 ## 6. Contribution reality (important)
 
@@ -97,8 +103,11 @@ Practical path for this workspace:
 
 ## 7. Daily sync
 
-`./.tools/dsh-sync.sh` — fetches `origin`, reports drift, fast-forwards `master` (never merges/rebases your work).
-A session reminder is scheduled daily at 09:00 Asia/Tehran to run the sync and summarize what changed upstream.
+No sync script was restored on the Debian host. Sync manually: `git fetch origin upstream`, report
+drift between `upstream/master` and `master`, fast-forward `master` and the fork default (via
+`PATCH /repos/aturzone/deepseek-harness/git/refs/heads/master` with `force:false` when the hook would
+block), and never merge or rewrite local work in the main clone. The daily 09:00 Asia/Tehran status
+reminder was not recreated after the migration.
 
 ## 8. Non-obvious gotchas
 

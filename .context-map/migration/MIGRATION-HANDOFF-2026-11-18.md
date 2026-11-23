@@ -1,5 +1,10 @@
 # DSH contribution work — migration handoff (2026-11-18, host `sword` → Debian 13)
 
+**Post-migration state (2026-11-23):** the migration executed and the workspace is live on the
+Debian host — see `DEBIAN-WORKSPACE-2026-11-23.md` for the actual layout, toolchain, and measured
+verification. The branch table below is the freeze snapshot; the up-to-date tips are in
+`playbook/06-contribution-ledger.md`.
+
 This file, `.context-map/` and the scripts under `.context-map/migration/` are force-added to the fork branch
 `meta/context-map` so they survive the host wipe. Recover with:
 
