@@ -21,13 +21,8 @@
   en: 11ef18c6d08f39f3
   zh: 2911cdd03ff3747d
 /deepseek-ai-dsh-hmr/understand-the-implementation:
-<<<<<<< HEAD
-  en: a1eede170f8754f0
-  zh: dd2bfef9ad06ee3b
-=======
-  en: 7c7c5412cd3050cc
-  zh: 9684a89e78964ec0
->>>>>>> e25bc1b194 (fix(hmr): end a transaction context when its operation settles)
+  en: cb81346784583fb9
+  zh: d27bf4e0c8633220
 /deepseek-ai-dsh-hmr/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
