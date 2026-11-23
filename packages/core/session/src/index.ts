@@ -634,8 +634,14 @@ export class Session {
       const [type, data, surfaceOpts] = input
       return snapshotAppend(type, data, surfaceOpts, `session batch member ${index} ("${type}")`)
     })
+    // Payload getters may append to or detach the Session.
+    const entry = this.publicationEntry()
+    const startSeq = this.log.length
+    const events = snapshots.map((snapshot, index) => createAppendEvent(snapshot, SessionSeq(startSeq + index)))
+    const acceptSurface = this.surfaceManager.prepareBatch(events)
     // Turn-scoped batch members must see the turn state the batch commits with:
     // replay the open-turn cursor across the batch before publishing any of them.
+    // Event-local surface metadata is validated first, as on the single append path.
     let plannedOpenTurn = this.openTurn
     for (const snapshot of snapshots) {
       if (!plannedOpenTurn && TURN_SCOPED_APPEND_TYPES.has(snapshot.type)) {
@@ -644,11 +650,6 @@ export class Session {
       if (snapshot.type === 'turn/start') plannedOpenTurn = true
       else if (snapshot.type === 'turn/end') plannedOpenTurn = false
     }
-    // Payload getters may append to or detach the Session.
-    const entry = this.publicationEntry()
-    const startSeq = this.log.length
-    const events = snapshots.map((snapshot, index) => createAppendEvent(snapshot, SessionSeq(startSeq + index)))
-    const acceptSurface = this.surfaceManager.prepareBatch(events)
     if (entry !== undefined) entry.appending = true
     try {
       const publications = entry === undefined ? [] : events.map((event) => {
