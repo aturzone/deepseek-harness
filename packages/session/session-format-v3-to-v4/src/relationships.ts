@@ -188,7 +188,10 @@ class Relationships {
     if (existing !== undefined && existing.data['rootCallId'] !== root) throw new SessionFormatError('PTC dispatch changes its rootCallId')
     if (parent !== root && this.dispatches.get(parent)?.data['rootCallId'] !== root) throw new SessionFormatError('PTC parentCallId does not belong to rootCallId')
     if (event.type === 'tool/ptc-dispatch-start') {
-      if (existing !== undefined) throw new SessionFormatError('PTC dispatch repeats subCallId')
+      // PTC derives the subCallId from the parent tool-call id, which a provider may
+      // repeat verbatim in a later turn; only a second start for one unsettled
+      // dispatch is invalid, so a settled id may be dispatched again.
+      if (existing !== undefined && !existing.settled) throw new SessionFormatError('PTC dispatch repeats subCallId')
       this.dispatches.set(id, { data, settled: false })
       return
     }
