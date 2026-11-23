@@ -203,6 +203,8 @@ it('carries final tool rendering with structured binding values independently of
     }))
     ctx.on('tools/ptc-dispatch-log', async () => [{ type: 'text', text: 'Durable preview' }])
     const session = Session.create(brandString<SessionId>('ptc-inspection'))
+    // PTC dispatch records are turn-scoped; the durable preview needs an open turn.
+    session.append('turn/start', { turn: 1 })
     const agent = { ctx, session } as Agent
     runtime.behavior = async (request) => {
       const result = await request.bindings[0]!.functions.count!({})

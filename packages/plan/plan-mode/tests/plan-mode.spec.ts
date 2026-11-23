@@ -989,6 +989,8 @@ describe('exit_plan_mode', () => {
       },
     })
     const agent = await agentWithSession(ctx, 'ptc-exit', { active: true })
+    // PTC dispatch records are turn-scoped; the direct run_code fixture needs an open turn.
+    agent.session.append('turn/start', { turn: 1 })
 
     const result = await executeModelToolFixture(ctx, {
       toolSet: await ctx.tools.resolve({ agent, modelSelection: TEST_MODEL_SELECTION, signal: testToolSignal }),

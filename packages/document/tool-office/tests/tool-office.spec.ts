@@ -727,6 +727,8 @@ describe('PTC dispatch', () => {
       return { output: [] }
     }
     const agent = { ...agentOn('vision'), ctx }
+    // PTC dispatch records are turn-scoped; the direct run_code fixture needs an open turn.
+    agent.session.append('turn/start', { turn: 1 })
     await loadOffice(ctx, agent)
     const toolSet = await ctx.tools.resolve({ agent: agent as never, modelSelection: { provider: 'visual', model: 'vision' }, signal })
     onTestFinished(() => { toolSet.dispose() })

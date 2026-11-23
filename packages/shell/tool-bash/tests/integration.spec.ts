@@ -105,6 +105,8 @@ describe('bash tool through the agent loop', () => {
     const ctx = await harness(new MockAdapter([]))
     try {
       const agent = await ctx.agentLoop.create(brandString<SessionId>('nested-shell-current-directory'), {}, { cwd: root })
+      // PTC dispatch records are turn-scoped; the direct run_code fixture needs an open turn.
+      agent.session.append('turn/start', { turn: 1 })
       await ctx.workingDirectory.set(agent, selected)
       class BashBindingRuntime extends PtcRuntime {
         readonly language = 'typescript'

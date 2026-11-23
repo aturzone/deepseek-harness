@@ -81,6 +81,8 @@ async function executeShell(text: string, nested: boolean, name = 'bash', maxInl
       async execute() { return [{ type: 'text', text }] },
     })))
     const session = Session.create(brandString<SessionId>('spill-terminal'))
+    // PTC dispatch records are turn-scoped; the nested run_code fixture needs an open turn.
+    session.append('turn/start', { turn: 1 })
     // Nested PTC registers retained-environment cleanup on the owning context.
     const agent = { ctx, session } as Agent
     const callId = brandString<ToolCallId>('shell-call')
