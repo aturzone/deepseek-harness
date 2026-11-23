@@ -2,7 +2,8 @@
 
 Status vocabulary and proof requirements: see `00-README.md#acceptance-taxonomy`. Never upgrade a status without the
 proof. Rows 1–23 and the 2026-11-05/06 notes were verified 2026-11-05/06; rows 24–28, the 2026-11-11 audit, and the
-2026-11-11 release-day log were verified 2026-11-11.
+2026-11-11 release-day log were verified 2026-11-11. The 2026-11-23 post-migration wave re-verified every active
+branch against `origin/master` = `dsh-v0.2.3-alpha.2`.
 
 ## MIGRATION HANDOFF (2026-11-18)
 
@@ -12,6 +13,10 @@ tree is force-added to the fork branch **`meta/context-map`** (recover with
 runbook, branch table, bootstrap order and pitfalls: `.context-map/migration/MIGRATION-HANDOFF-2026-11-18.md`.
 Freeze state: runtime rc.3 under Node 24; upstream rc.4 (`ca33fd6843`, +807 commits); 19 patch branches still
 rc.3-based and pending rebase; newest shipped fix `fix/hmr-module-graph-child-filename` @ `7e4bf5601d` (rc.4-based).
+
+**Post-migration status (2026-11-23):** the migration executed; the workspace is live on Debian 13 at
+`/home/atur/Workspace/deepseek-harness` (see `migration/DEBIAN-WORKSPACE-2026-11-23.md`). All 19 branches were
+rebased onto `origin/master` = `dsh-v0.2.3-alpha.2` (`4b399c39a6`); tips are in the 2026-11-23 entry below.
 
 ## Active contributions
 
@@ -46,10 +51,11 @@ rc.3-based and pending rebase; newest shipped fix `fix/hmr-module-graph-child-fi
 
 ## Baseline facts
 
-- Upstream accepted/merged: **0**.
+- Upstream accepted/merged: **0** (re-verified 2026-11-23; no merged PR has ever existed).
 - Upstream business: external PRs closed (`CONTRIBUTING.md:9`); Issues disabled; Discussions only.
 - Community expert engagement: PerryLink (not DeepSeek-affiliated) confirmed the settings bug on `fcc0ad46` and proposed a refinement we implemented.
 - Patches are on the fork `aturzone/deepseek-harness`; upstream `origin` remains canonical.
+- Installed runtime on the Debian host: `0.2.2-rc.1`; npm `next`/`latest` = `0.2.2-rc.5`, `alpha` = `0.2.3-alpha.2`.
 
 ### 2026-11-05 (late 28) — Phase 1 unit 29
 - New report #12191 (desktop rc.5, profile patch "data loss"): verified against source and design note that recovery intentionally renames the whole patch and creates an empty one; hand-written MCP `insert` rows move to the backup, so tools disappear with no error.
@@ -510,6 +516,69 @@ rc.3-based and pending rebase; newest shipped fix `fix/hmr-module-graph-child-fi
   jobs on this host; host stays on rc.3. Handoff recorded in brain (`journal`, `memory`); daily check is not
   recreated until the migration is done. Post-migration order: re-clone/restore checkout → rebase the 18 branches
   onto rc.4 → upgrade runtime + profile plugins to rc.4 → recreate the daily check.
+
+### 2026-11-23 — Debian workspace bootstrap + full rebase wave onto 0.2.3-alpha.2
+
+**Post-migration workspace is live.** The `sword` → Debian 13 migration completed; the contribution workspace is
+now `/home/atur/Workspace/deepseek-harness` (clone of the fork, main clone on `master` @ `4b399c39a6`). Bootstrap
+facts and the sandbox/toolchain workarounds are in `migration/DEBIAN-WORKSPACE-2026-11-23.md`; `.tools/env.sh`
+(recorded as `migration/env.sh`) is the entry point for every command. Fork `master` is current at `4b399c39a6`;
+`upstream` is configured read-only for drift checks. Gates verified on the new host:
+`CI=true pnpm install --frozen-lockfile` 3m07s; repo-wide `pnpm run typecheck` 5/5 gates in 157 s; HMR suite 240
+pass. Git hooks are installed, so every branch push ran the real pre-push typecheck (30–175 s each) instead of
+bypassing it.
+
+**Full rebase wave.** All 19 prepared branches were checked against `origin/master` (= `dsh-v0.2.3-alpha.2`, released
+2026-11-22), rebased, re-verified with focused owning tests + focused `tsc -b` + oxlint, and published to the fork
+with `--force-with-lease` (observed old OID recorded per branch). `git merge-tree` had predicted 9 textual conflicts;
+each conflict was re-applied on the current code, and upstream refactors required semantic adaptation in 9 branches.
+Result: **18 current branches, 1 retire-candidate, 0 merged upstream.**
+
+| branch | new tip | status | adaptation note |
+|---|---|---|---|
+| fix/hmr-module-graph-child-filename | 28ee62b21d | clean | — |
+| fix/tool-result-well-formed | cb1a270940 | adapted | choke points re-applied after master moved seed validation into `checkSessionLog`/`validation.ts`; the `renderPrompt` removal is absorbed |
+| fix/dsh-bug-triage | ebe670f393 (7 commits) | adapted | turn-scope guard validates batch surface metadata before rejecting; upstream `programValue`/`startLogged` PTC shape kept; five upstream-added direct-PTC fixtures now open a turn; bilingual pairing re-recorded; the settings `describe` fix survives |
+| fix/hmr-transaction-context | c5d2da45da | adapted | settle-context README sentence merged onto the `--patch` overlay wording |
+| fix/file-reference-scope-guard | 71c4783eed | clean | negative control still fails with `INACTIVE_EFFECT` on master |
+| fix/effect-async-rejection | bf45cd0bab | adapted | vendor log entry renumbered to **V31** (`next V32`); upstream Cordis is still rc.12 and still discards async-effect rejections |
+| fix/boot-launcher-runtime-version | 7131ded977 | adapted | `profileContext.runtimeVersion` re-applied on the renamed `overlayPaths` field; EN/ZH README and pairing re-recorded |
+| fix/profile-silent-reset-guard | 0dcf43686b | adapted | initializer-owned set keeps `lock` (legacy Desktop artifact, no current writer); lint bracing |
+| fix/agent-preset-unknown-message | ae5e67638b | clean | — |
+| fix/static-index-no-store | 6ebd5f4dd7 | clean | — |
+| fix/plugin-manager-update-line | 769d65d5ee | clean | — |
+| fix/schedule-completion-gate | 17101ee2ae | clean | adds `@deepseek-ai/dsh-client-ui-session-status` workspace dep + client tsconfig reference + lockfile; frozen install verified |
+| fix/chat-tail-space-reclaim | d51b8851c6 | clean | — |
+| fix/truncation-surrogate-pairs | ae88e64bce | adapted | uses `truncateWithoutSplittingSurrogatePair`; **changes the upstream characterization test from PR #8643** that pinned the lone surrogate, and the commit says why |
+| fix/windows-alias-executable | 38f60c700e | adapted | alias acceptance moved inside upstream `isExecutableFile()` catch |
+| fix/subprocess-managed-internals | d631ef321f | clean | — |
+| feat/locale-writing-direction | b2d6d0c133 | adapted | logical CSS; rail/preview follow upstream's move to inline-start; new logical-CSS scanner + `document-language` specs; aside-style expectation updated |
+| docs/recovery-handwritten-rows | 1c9940f5e0 | clean | `test:docs` 21/21 |
+| docs/cordis-skill-replacement-restart | c116153892 (unchanged) | **RETIRE-CANDIDATE** | upstream `fe6229109f` + `9b431e701e` now state the recomposition-reload rule and name `restartReason`; stronger than our edit. Fork branch retained, nothing deleted |
+
+**Fix-still-needed re-confirmed on master** (greps): no `SessionTurnScopeError` / `wellFormedToolResult` /
+`CompletionGate` / `turnRunning` / `managedRunnerSeams`; no `profileContext.runtimeVersion`; no
+`isWindowsAppExecutionAlias`; no logical inline/block CSS in the chat surface; no index `no-store`; no registry
+`latest` update line; profile reset still silent; the recovery README still omits hand-written rows. One open
+decision: keep or later delete the retired `docs/cordis-skill-replacement-restart` fork branch.
+
+**Public activity since the freeze (only one new item, a mention):**
+- #9924 mention (Minervaowl7, 2026-11-19 05:09Z): Windows x64 packaged **0.2.2-rc.5**, two clean starts,
+  `dsh-auth-*` `0 → 0 → 0`. Replied with tag-level evidence: rc.5 carries `removeLegacyHostCookies`
+  (`apps/desktop/src/main.ts:551`, `web-document.ts:65-69`) and no longer stores a jar cookie
+  (`main.ts:547-555`), while `dsh-v0.2.2-rc.1` has neither; included a deliberate legacy-row seeding procedure to
+  exercise the cleanup half → `#discussioncomment-19834172`.
+- #12911: closed our own loop with the rc.5 fact and the community datapoint →
+  `#discussioncomment-19834326`.
+- Sweep of all 30 tracked discussions: **zero other comments since 2026-11-18**; still zero maintainer replies.
+
+**Durable state:** meta branch rebased onto current master and refreshed with this ledger + the bootstrap doc →
+`meta/context-map` @ `c1513e70b3` (bootstrap commit) + this entry. Worktrees kept under `.worktrees/{wA,wB,wC}` for
+the next wave; the main clone stays clean on `master`.
+
+**Open:** runtime upgrade `0.2.2-rc.1` → `0.2.2-rc.5` (or the alpha line) needs a supervised restart and changes the
+GUI URL; `dsh-session-doctor` npm publish is still blocked on account 2FA; the daily 09:00 Asia/Tehran status check
+was not recreated.
 
 ## Currency rule (2026-11-06)
 
