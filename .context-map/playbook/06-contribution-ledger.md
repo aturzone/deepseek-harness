@@ -47,7 +47,9 @@ rebased onto `origin/master` = `dsh-v0.2.3-alpha.2` (`4b399c39a6`); tips are in 
 | 25 | `wsl.exe` argument re-interpretation in a data-loss incident (Discussion #12846) | independent triage | **published**, awaiting reply | comment: `#discussioncomment-19535605` | Confirmed dsh-ops 0.3.0 argv path and DSH guard seams; corrected the WSL mechanism (`--` is not an argv boundary; `-e/--exec` or in-WSL script), gave a zero-side-effect A/B test, safe form, guard-to-seam table, recovery checklist |
 | 26 | Desktop auth-cookie 431 recurrence: upstream fix exists but is outside the released shell (Discussion #12911) | analysis | **published**, awaiting reply | comment: `#discussioncomment-19535418` · `5868dbc357`/`93bef27ec7` are on master `fcc0ad4621` but not in `dsh-v0.2.2-rc.1` (`66491b05e3`); our `fix/desktop-cookie-cleanup-order` @ `495f17a0e4` hardens ordering | Next desktop build should carry the fix; re-measure `Network/Cookies` and 431 afterwards |
 | 27 | Idle `dsh web` SIGSEGV cores sit in V8 scavenger (Discussion #12596) | analysis | **published**, awaiting reply | comment: `#discussioncomment-19535617` | Verified flag matrix on Node 24.22.2 (no concurrent-scavenger flag; `--no-parallel-scavenge`, `--single-threaded-gc`, NODE_OPTIONS limits, semi-space direction), A/B matrix, nodejs/node checklist, `si_code=-6` provenance question |
-| 28 | `dsh-session-doctor` released via Git and announced (Discussions #12927, #11971, #11981) | plugin release | **released** (GitHub), npm pending | repo https://github.com/aturzone/dsh-session-doctor @ `332d983` (bundle row now uses the scoped name — the first release tree did not mount) · announcement `#12927` · links: #11971 `#discussioncomment-19535608`, #11981 `#discussioncomment-19535609` · pinned GitHub install + boot HTTP 200 verified on dsh 0.2.2-rc.1 | npm publish blocked on account 2FA; watch install feedback and keep the reader-rule table in sync |
+| 28 | `dsh-session-doctor` released via Git and announced (Discussions #12927, #11971, #11981) | plugin release | **released** (GitHub + npm `latest` 0.1.2) | repo https://github.com/aturzone/dsh-session-doctor · npm `@aturdana/dsh-session-doctor` 0.1.2 via OIDC trusted publishing (GitHub Actions run 45233390344, provenance signed; repo commit `1768b6d`) · announcement `#12927` · links: #11971 `#discussioncomment-19535608`, #11981 `#discussioncomment-19535609` | Scoped package (the unscoped name belongs to an unrelated maintainer); `next` still points at 0.1.1 unless promoted |
+| 29 | pi-ai stream idle watchdog ignores SSE keepalive comments (Discussion #14176) | report + patch | **published**, awaiting reply | comment: `#discussioncomment-19837958` · branch `fix/pi-ai-sse-keepalive-idle` @ `6607175c9d` · keyless fake-timer repro (100 ms idle, `: keepalive` every 80 ms): master TIMEOUT, fixed tree completes; 509 package tests | Independently re-verifies a community reference patch and adds the failing-before test; transport-only fetch pulse, Gemini routes excluded |
+| 30 | Repeated provider `tool_call` id makes the session log unloadable (Discussion #14149) | report + patch | **published**, awaiting reply | comment: `#discussioncomment-19837984` · branch `fix/session-duplicate-call-id` @ `db7251bf16` · synthetic two-turn V4 replay fails pre-fix with `PTC dispatch repeats subCallId`, loads post-fix; v3-to-v4 package 407 tests | Reader accepts a settled subCallId start; provider-side repetition is synthetic in the repro, as stated in the comment |
 
 ## Baseline facts
 
@@ -516,6 +518,54 @@ rebased onto `origin/master` = `dsh-v0.2.3-alpha.2` (`4b399c39a6`); tips are in 
   jobs on this host; host stays on rc.3. Handoff recorded in brain (`journal`, `memory`); daily check is not
   recreated until the migration is done. Post-migration order: re-clone/restore checkout → rebase the 18 branches
   onto rc.4 → upgrade runtime + profile plugins to rc.4 → recreate the daily check.
+
+### 2026-11-23 (evening) — standing daily autopilot, npm release, two verified units, staged runtime upgrade
+
+**Standing daily autopilot created.** Schedule `schedule-382801cd` ("DSH contributor daily sync and contribution"):
+daily 09:30 Asia/Tehran, target `new_once` (fresh session in this workspace, standard preset). Its prompt covers
+upstream/fork sync, notification + tracked-Discussion sweep, branch-queue currency, one verified public unit when
+feasible, ledger + brain record, and is guarded against production/DNS/payment/Docker changes, host restart/upgrade
+without Atur's explicit ask, secrets, and verbose reports. First delivery 2026-11-24 09:30.
+
+**npm publish closed.** `@aturdana/dsh-session-doctor` 0.1.1 had already shipped under the `next` tag through OIDC
+trusted publishing (no 2FA token involved). Released **0.1.2** under `latest` through the existing
+`workflow_dispatch` publish workflow (run 45233390344, success, provenance signed; repo commit `1768b6d`). Registry:
+`latest = 0.1.2`, `next = 0.1.1`. The unscoped `dsh-session-doctor` npm name belongs to an unrelated maintainer; the
+scoped package is unaffected.
+
+**Two verified public units (both in our lanes; comments published):**
+- **#14176 — pi-ai SSE keepalive ignored by the idle watchdog** (`#discussioncomment-19837958`). pi-ai re-arms the
+  watchdog only on parsed iterator values (`packages/llm/llm-pi-ai/src/adapter.ts:443,485`), never on transport bytes
+  or SSE comment frames, although `IdleWatchdog.pulse()` exists for exactly that
+  (`packages/util/timeout/src/index.ts:83,184`) and `dsh-llm-deepseek` already uses `onComment`
+  (`packages/llm/llm-deepseek/src/sse.ts:14`). Keyless fake-timer repro: `streamIdleTimeoutMs: 100`, `: keepalive`
+  every 80 ms → master fails `TIMEOUT`, fixed tree completes; package suite 509 pass. Branch
+  `fix/pi-ai-sse-keepalive-idle` @ `6607175c9d`: transport-only `fetch` wrapper pulses per response-body byte; Gemini
+  routes excluded because pi-ai rejects a custom `fetch` there. A community reference patch was already in the thread
+  (`30eb288b`); ours independently re-verifies it and adds the failing-before test (attributed in the commit body).
+- **#14149 — repeated provider `tool_call` id makes the log unloadable** (`#discussioncomment-19837984`). PTC mints
+  `subCallId = <parent>:ptc:<n>` (`packages/core/tool-executor-ptc/src/ptc.ts:478`) while provider ids are persisted
+  verbatim (`packages/llm/llm-deepseek/src/translate.ts:57`), and the V4 relationship validator refused any repeat
+  (`packages/session/session-format-v3-to-v4/src/relationships.ts:191`). Keyless synthetic two-turn V4 replay through
+  the shipped catalog fails pre-fix and loads post-fix (a second start before settlement is still refused); package
+  407 tests. Branch `fix/session-duplicate-call-id` @ `db7251bf16`: log-only events, nothing model-visible changes.
+  The comment states the honest caveat that provider-side repetition is synthetic in the repro.
+
+**Retired-branch decision:** `docs/cordis-skill-replacement-restart` is kept on the fork as upstream-supersession
+evidence (not deleted); revisit at the next upstream release.
+
+**Runtime upgrade staged, not executed.** rc.5 (`latest`/`next`; alpha `0.2.3-alpha.2` rejected as a target) staged in
+`.tools/upgrade/` in the exact global layout: `--version` = `0.2.2-rc.5`, `--help`/`web --help` OK, native prebuilds
+load, and `--dump-config` on a copy of the live `web` profile exits 0 with a 1413-line composition (rc.1 baseline
+1396). Compatibility: 11/12 profile bundles present; `dsh-experimental-agent-team-profile` is retired in rc.5 and is
+auto-removed from the profile `package.json` on first boot (team tools move into base); all six `cordis.patch.yml`
+targets apply with configs intact; no third-party profile plugins; session format stays v4 on both sides. Full
+copy-paste swap + rollback: `.tools/upgrade/RUNBOOK-0.2.2-rc.5.md` (343 lines, `bash -n` checked). The bash sandbox
+cannot touch the live install or the user systemd bus, so the swap must be pasted once in a host shell (ttyd/SSH); it
+mints a new single-use GUI token URL and changes nothing else for other services.
+
+**Still open:** execute the staged rc.5 swap in a supervised host-shell window (rollback ready); promote the npm `next`
+tag to 0.1.2 only if wanted (needs npm auth; not required for installs).
 
 ### 2026-11-23 — Debian workspace bootstrap + full rebase wave onto 0.2.3-alpha.2
 
