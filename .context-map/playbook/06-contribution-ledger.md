@@ -48,12 +48,13 @@ rebased onto `origin/master` = `dsh-v0.2.3-alpha.2` (`4b399c39a6`); tips are in 
 | 26 | Desktop auth-cookie 431 recurrence: upstream fix exists but is outside the released shell (Discussion #12911) | analysis | **published**, awaiting reply | comment: `#discussioncomment-19535418` · `5868dbc357`/`93bef27ec7` are on master `fcc0ad4621` but not in `dsh-v0.2.2-rc.1` (`66491b05e3`); our `fix/desktop-cookie-cleanup-order` @ `495f17a0e4` hardens ordering | Next desktop build should carry the fix; re-measure `Network/Cookies` and 431 afterwards |
 | 27 | Idle `dsh web` SIGSEGV cores sit in V8 scavenger (Discussion #12596) | analysis | **published**, awaiting reply | comment: `#discussioncomment-19535617` | Verified flag matrix on Node 24.22.2 (no concurrent-scavenger flag; `--no-parallel-scavenge`, `--single-threaded-gc`, NODE_OPTIONS limits, semi-space direction), A/B matrix, nodejs/node checklist, `si_code=-6` provenance question |
 | 28 | `dsh-session-doctor` released via Git and announced (Discussions #12927, #11971, #11981) | plugin release | **released** (GitHub + npm `latest` 0.1.2) | repo https://github.com/aturzone/dsh-session-doctor · npm `@aturdana/dsh-session-doctor` 0.1.2 via OIDC trusted publishing (GitHub Actions run 45233390344, provenance signed; repo commit `1768b6d`) · announcement `#12927` · links: #11971 `#discussioncomment-19535608`, #11981 `#discussioncomment-19535609` | Scoped package (the unscoped name belongs to an unrelated maintainer); `next` still points at 0.1.1 unless promoted |
-| 29 | pi-ai stream idle watchdog ignores SSE keepalive comments (Discussion #14176) | report + patch | **published**, awaiting reply | comment: `#discussioncomment-19837958` · branch `fix/pi-ai-sse-keepalive-idle` @ `6607175c9d` · keyless fake-timer repro (100 ms idle, `: keepalive` every 80 ms): master TIMEOUT, fixed tree completes; 509 package tests | Independently re-verifies a community reference patch and adds the failing-before test; transport-only fetch pulse, Gemini routes excluded |
+| 29 | pi-ai stream idle watchdog ignores SSE keepalive comments (Discussion #14176) | report + patch | **published**, awaiting reply | comments: `#discussioncomment-19837958`, retry-chain verification `#discussioncomment-19849579` · branch `fix/pi-ai-sse-keepalive-idle` @ `6607175c9d` · keyless fake-timer repro (100 ms idle, `: keepalive` every 80 ms): master TIMEOUT, fixed tree completes; 509 package tests | Independently re-verifies a community reference patch and adds the failing-before test; transport-only fetch pulse, Gemini routes excluded |
 | 30 | Repeated provider `tool_call` id makes the session log unloadable (Discussion #14149) | report + patch | **published**, awaiting reply | comment: `#discussioncomment-19837984` · branch `fix/session-duplicate-call-id` @ `db7251bf16` · synthetic two-turn V4 replay fails pre-fix with `PTC dispatch repeats subCallId`, loads post-fix; v3-to-v4 package 407 tests | Reader accepts a settled subCallId start; provider-side repetition is synthetic in the repro, as stated in the comment |
+| 31 | Assistant reply contains the next turn's user message and runtime context (Discussion #14220) | triage | **published**, awaiting artifact | comment: `#discussioncomment-19849586` · injection points `packages/core/agent-loop/src/agent.ts:290,303-306,396`; requested the decoded JSONL slice around seq 21135, the adjacent `turn/start`/`step/start`/`inbox spliced`/`user/message` events, and the session header versions | A `preparing turn 1509` block cannot be in the request for a message recorded under turn 1506; either the event's turn is misattributed or the request was assembled for the later turn, and the slice separates them |
 
 ## Baseline facts
 
-- Upstream accepted/merged: **0** (re-verified 2026-11-23; no merged PR has ever existed).
+- Upstream accepted/merged: **0** (re-verified 2026-11-24; no merged PR has ever existed).
 - Upstream business: external PRs closed (`CONTRIBUTING.md:9`); Issues disabled; Discussions only.
 - Community expert engagement: PerryLink (not DeepSeek-affiliated) confirmed the settings bug on `fcc0ad46` and proposed a refinement we implemented.
 - Patches are on the fork `aturzone/deepseek-harness`; upstream `origin` remains canonical.
@@ -518,6 +519,46 @@ rebased onto `origin/master` = `dsh-v0.2.3-alpha.2` (`4b399c39a6`); tips are in 
   jobs on this host; host stays on rc.3. Handoff recorded in brain (`journal`, `memory`); daily check is not
   recreated until the migration is done. Post-migration order: re-clone/restore checkout → rebase the 18 branches
   onto rc.4 → upgrade runtime + profile plugins to rc.4 → recreate the daily check.
+
+### 2026-11-24 — daily check: upstream frozen, verified retry-chain reply, new-report triage
+
+**Sync:** `git fetch origin upstream` — `upstream/master` = `origin/master` = `master` = `4b399c39a6` (0 ahead, 0 behind);
+fork default matches. No rebase or push needed: all 20 local patch branches are 0 behind `origin/master`, and the
+fork-only `docs/cordis-skill-replacement-restart` remains the single RETIRE-CANDIDATE (retained, not deleted).
+
+**Public channel:** notification sweep plus a GraphQL sweep of the 41 tracked discussions. Only new item since the
+2026-11-23 evening run is argszero's analysis on #14176 (2026-11-24T01:14Z). Replied with independently verified
+evidence (`#discussioncomment-19849579`):
+- **Version correction:** the manifest declares `^1.3.0` (`packages/llm/llm-pi-ai/package.json:49`) and
+  `pnpm-lock.yaml:21712` pins `@earendil-works/pi-ai@1.3.0`, not 1.1.0. The premise still holds at 1.3.0, read from
+  the installed `dist/`: `decodeSseLine` drops `:` lines (`anthropic-messages.js:255`); `openai-responses` consumes a
+  parsed stream (`openai-responses-shared.js:491`); the custom `fetch` seam is real there
+  (`openai-responses.js:137,235`, `types.d.ts:57`); the two Google routes throw on a custom `fetch`
+  (`google-generative-ai.js:36`, `google-vertex.js:39`).
+- **Retry chain confirmed:** `TIMEOUT` is `retryChoice` (`packages/llm/llm/src/error.ts:63`); omission resolves to
+  normal mode with `maxRetries` 5 (`retry-policy.ts:16,158-165`); `TIMEOUT` is in `DEFAULT_RETRYABLE_CODES`
+  (`:20-25`); normal mode stops at `maxRetries` (`llm-retry/src/index.ts:221`); the plugin ships in the base bundle
+  (`packages/bundle/base/cordis.patch.yml:99-100`). `adapter.ts:165` sets pi-ai's own `maxRetries: 0`, so DSH's layer
+  is the only retry layer — six 300 s windows + backoff ≈ 30 min 15 s, ≈ 90 min at a 900 s window.
+- Branch `fix/pi-ai-sse-keepalive-idle` @ `6607175c9d` unchanged and current; no merge or acceptance claimed.
+
+**New reports triaged** (all created after the previous run; none yet a keyless source-reproducible fix):
+#14213 private-registry plugin re-resolved against the public mirror during a GitHub install (registry-plan/design;
+needs the reporter's lockfile); #14216 Windows packaged `resources/runtime` empty after update (needs a packaged build);
+#14220 assistant text carries the next turn's user message and runtime context — replied
+`#discussioncomment-19849586` with the injection points (`agent.ts:290,303-306,396`) and requested the decoded slice
+around seq 21135 plus header versions, since the text is not reproducible without the artifact; #14214/#14218 Windows
+GUI; #14221 startup environment; #14215/#14217/#14223/#14224 feature requests; #14222 external Worker 403.
+
+**Status changes:** item 29 proof extended with the retry-chain verification; new row 31 (#14220) = **published**,
+awaiting artifact. merged upstream = 0.
+
+**Checks run:** source greps only (no code change), `git fetch`, notification/GraphQL sweeps; no gates needed.
+
+**Blocked by:** no fresh keyless reproducible report yet; maintainer attention unchanged (still zero reviewer replies).
+
+**Next:** analyse #14220's artifact if the reporter supplies it; keep the 21 fork branches current; the staged rc.5
+swap still needs a supervised host-shell window.
 
 ### 2026-11-23 (evening) — standing daily autopilot, npm release, two verified units, staged runtime upgrade
 
