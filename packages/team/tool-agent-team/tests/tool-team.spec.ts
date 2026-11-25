@@ -641,6 +641,22 @@ describe('dsh-tool-team', () => {
     await child.dispose()
   })
 
+  it('treats an empty or whitespace owner filter as omitted', async () => {
+    const { ctx, lead } = await setup([])
+    const pending = await ctx.agentTeams.createTask(lead, { subject: 'Pending', description: 'Unowned work' })
+    const resolveName = vi.spyOn(ctx.subagents, 'resolveName')
+
+    expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', { owner: '', unowned: true }))))
+      .toMatchObject({ tasks: [{ id: pending.id }] })
+    expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', { owner: '   ', unowned: true }))))
+      .toMatchObject({ tasks: [{ id: pending.id }] })
+    expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', { owner: '', status: 'pending' }))))
+      .toMatchObject({ tasks: [{ id: pending.id }] })
+    expect(resolveName).not.toHaveBeenCalled()
+    expect(await execute(ctx, lead, 'team_task_list', { owner: 'lead', unowned: true }))
+      .toMatchObject({ isError: true, error: { info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } } })
+  })
+
   it('reads and edits saved owner names without traversing descendant Sessions', async () => {
     const { ctx, lead } = await setup([])
     const created = await ctx.agentTeams.createTask(lead, { subject: 'Review', description: 'Saved ownership' })
