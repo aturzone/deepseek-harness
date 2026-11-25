@@ -48,13 +48,14 @@ rebased onto `origin/master` = `dsh-v0.2.3-alpha.2` (`4b399c39a6`); tips are in 
 | 26 | Desktop auth-cookie 431 recurrence: upstream fix exists but is outside the released shell (Discussion #12911) | analysis | **published**, awaiting reply | comment: `#discussioncomment-19535418` · `5868dbc357`/`93bef27ec7` are on master `fcc0ad4621` but not in `dsh-v0.2.2-rc.1` (`66491b05e3`); our `fix/desktop-cookie-cleanup-order` @ `495f17a0e4` hardens ordering | Next desktop build should carry the fix; re-measure `Network/Cookies` and 431 afterwards |
 | 27 | Idle `dsh web` SIGSEGV cores sit in V8 scavenger (Discussion #12596) | analysis | **published**, awaiting reply | comment: `#discussioncomment-19535617` | Verified flag matrix on Node 24.22.2 (no concurrent-scavenger flag; `--no-parallel-scavenge`, `--single-threaded-gc`, NODE_OPTIONS limits, semi-space direction), A/B matrix, nodejs/node checklist, `si_code=-6` provenance question |
 | 28 | `dsh-session-doctor` released via Git and announced (Discussions #12927, #11971, #11981) | plugin release | **released** (GitHub + npm `latest` 0.1.2) | repo https://github.com/aturzone/dsh-session-doctor · npm `@aturdana/dsh-session-doctor` 0.1.2 via OIDC trusted publishing (GitHub Actions run 45233390344, provenance signed; repo commit `1768b6d`) · announcement `#12927` · links: #11971 `#discussioncomment-19535608`, #11981 `#discussioncomment-19535609` | Scoped package (the unscoped name belongs to an unrelated maintainer); `next` still points at 0.1.1 unless promoted |
-| 29 | pi-ai stream idle watchdog ignores SSE keepalive comments (Discussion #14176) | report + patch | **published**, awaiting reply | comments: `#discussioncomment-19837958`, retry-chain verification `#discussioncomment-19849579` · branch `fix/pi-ai-sse-keepalive-idle` @ `6607175c9d` · keyless fake-timer repro (100 ms idle, `: keepalive` every 80 ms): master TIMEOUT, fixed tree completes; 509 package tests | Independently re-verifies a community reference patch and adds the failing-before test; transport-only fetch pulse, Gemini routes excluded |
+| 29 | pi-ai stream idle watchdog ignores SSE keepalive comments (Discussion #14176) | report + patch | **published**, awaiting reply | comments: `#discussioncomment-19837958`, retry-chain verification `#discussioncomment-19849579`, patch-artifact verification `#discussioncomment-19880652` · branch `fix/pi-ai-sse-keepalive-idle` @ `6607175c9d` · keyless fake-timer repro (100 ms idle, `: keepalive` every 80 ms): master TIMEOUT, fixed tree completes; 509 package tests | Independently re-verifies a community reference patch and adds the failing-before test; transport-only fetch pulse, Gemini routes excluded |
 | 30 | Repeated provider `tool_call` id makes the session log unloadable (Discussion #14149) | report + patch | **published**, awaiting reply | comment: `#discussioncomment-19837984` · branch `fix/session-duplicate-call-id` @ `db7251bf16` · synthetic two-turn V4 replay fails pre-fix with `PTC dispatch repeats subCallId`, loads post-fix; v3-to-v4 package 407 tests | Reader accepts a settled subCallId start; provider-side repetition is synthetic in the repro, as stated in the comment |
-| 31 | Assistant reply contains the next turn's user message and runtime context (Discussion #14220) | triage | **published**, awaiting artifact | comment: `#discussioncomment-19849586` · injection points `packages/core/agent-loop/src/agent.ts:290,303-306,396`; requested the decoded JSONL slice around seq 21135, the adjacent `turn/start`/`step/start`/`inbox spliced`/`user/message` events, and the session header versions | A `preparing turn 1509` block cannot be in the request for a message recorded under turn 1506; either the event's turn is misattributed or the request was assembled for the later turn, and the slice separates them |
+| 31 | Assistant reply contains the next turn's user message and runtime context (Discussion #14220) | triage | **published**, awaiting artifact | comments: `#discussioncomment-19849586`, artifact follow-up `#discussioncomment-19880651` · injection points `packages/core/agent-loop/src/agent.ts:290,303-306,396`; requested the decoded JSONL slice around seq 21135, the adjacent `turn/start`/`step/start`/`inbox spliced`/`user/message` events, and the session header versions | A `preparing turn 1509` block cannot be in the request for a message recorded under turn 1506; either the event's turn is misattributed or the request was assembled for the later turn, and the slice separates them. Reporter supplied a summary and rejects both; the raw JSON for seq 21129/21133/21135 plus a whole-log search for the plain phrase and the exact fabricated turn-1509 block are the remaining discriminator |
+| 32 | `team_task_list` rejects an empty-string `owner` combined with `unowned` (Discussion #14280) | report + patch | **published**, awaiting reply | comment: `#discussioncomment-19880649` · branch `fix/team-task-list-empty-owner` @ `e05381cc0a` · regression fails pre-fix with the reported `owner and unowned filters cannot be combined`; owning file 46/46, `tsc -b` 0, oxlint 0, changed file 100% coverage | Trim before the mutual-exclusion guard and treat empty/whitespace as no filter (also for name resolution); a real owner name + `unowned` still rejects INVALID_ARGS |
 
 ## Baseline facts
 
-- Upstream accepted/merged: **0** (re-verified 2026-11-24; no merged PR has ever existed).
+- Upstream accepted/merged: **0** (re-verified 2026-11-25; no merged PR has ever existed).
 - Upstream business: external PRs closed (`CONTRIBUTING.md:9`); Issues disabled; Discussions only.
 - Community expert engagement: PerryLink (not DeepSeek-affiliated) confirmed the settings bug on `fcc0ad46` and proposed a refinement we implemented.
 - Patches are on the fork `aturzone/deepseek-harness`; upstream `origin` remains canonical.
@@ -519,6 +520,47 @@ rebased onto `origin/master` = `dsh-v0.2.3-alpha.2` (`4b399c39a6`); tips are in 
   jobs on this host; host stays on rc.3. Handoff recorded in brain (`journal`, `memory`); daily check is not
   recreated until the migration is done. Post-migration order: re-clone/restore checkout → rebase the 18 branches
   onto rc.4 → upgrade runtime + profile plugins to rc.4 → recreate the daily check.
+
+### 2026-11-25 — daily check: upstream still frozen, team_task_list empty-owner fix shipped
+
+**Sync:** `git fetch origin upstream` — `upstream/master` = `origin/master` = `master` = `4b399c39a6` (0 ahead, 0 behind);
+fork default matches. Upstream has not moved since the 2026-11-22 release. No rebase needed: all 21 local branches are
+0 behind `origin/master` and their fork tips match; the fork-only `docs/cordis-skill-replacement-restart` remains the
+single RETIRE-CANDIDATE (retained, not deleted).
+
+**New report fixed (#14280, filed 2026-11-25):** `team_task_list` rejected `{owner: "", unowned: true}` because the
+mutual-exclusion guard compared the raw argument (`packages/team/tool-agent-team/src/index.ts:168`); a model filling
+an optional string with `""` turned a harmless default into `INVALID_ARGS`, and the reporter watched a subagent loop
+through filter combinations. Fixed by trimming before the guard and treating empty or whitespace-only owner as no
+filter — including for the subagent-name lookup — while a real owner name plus `unowned` still rejects. Branch
+`fix/team-task-list-empty-owner` @ `e05381cc0a` (fork), reported `#discussioncomment-19880649`. Evidence: the new
+regression fails pre-fix with the reported text and passes post-fix; owning file 46/46; `tsc -b
+packages/team/tool-agent-team` exit 0; oxlint 0 errors on both changed files; `packages/team/tool-agent-team/src` at
+100% statements/branches/functions/lines; pre-push hook typecheck passed (131.87 s).
+
+**Public channel:** #14176 — argszero posted a self-correction (1.3.0 is the right generation) plus an artifact note:
+the repo patches pi-ai through `pnpm-workspace.yaml:126` and `patches/@earendil-works__pi-ai@1.3.0.patch`, whose
+hunks start at `@@ -588`/`@@ -561`, after the lines this thread cites. Replied `#discussioncomment-19880652` confirming
+the patch read independently (same patch hash in the installed tree): two readers now agree and the branch stays at
+`6607175c9d`. #14220 — the reporter supplied the decoded slice, shows the only turn-1506 input was `内存不够？`, and
+rejects both earlier hypotheses (misattributed turn / request assembled at turn 1509) in favour of model continuation.
+Replied `#discussioncomment-19880651` with the remaining discriminator: whole-log search for the plain `不要了` and for
+the exact fabricated turn-1509 block, plus the raw JSON for seq 21129/21133/21135; runtime-context snapshots are
+committed `user/message` events (`agent.ts:457,466`; `runtime-context.ts:76-97`), so the boilerplate is reproducible
+from the model's own history and only the turn number/timestamp need inventing. Also noted that a `user/message` with
+an empty turn is normal and does not indicate a misattributed write.
+
+**Status changes:** new row 32 (#14280) = **published**, branch offered; row 31 (#14220) still awaiting raw JSON; row
+29 (#14176) proof extended. merged upstream = 0.
+
+**Checks run:** `pnpm exec vitest run packages/team/tool-agent-team/tests/tool-team.spec.ts` (46/46 post-fix; the new
+case fails pre-fix), `pnpm exec tsc -b packages/team/tool-agent-team` (0), `pnpm exec tsx scripts/run-oxlint.ts
+<src + test>` (0 errors), coverage scoped to `packages/team/tool-agent-team/src/**` (`index.ts` 100%).
+
+**Blocked by:** maintainer attention unchanged (still zero reviewer replies); upstream repository frozen for 3 days.
+
+**Next:** decode #14220's raw JSON if the reporter supplies it; keep the 22 fork patch branches current; the staged
+rc.5 swap still needs a supervised host-shell window.
 
 ### 2026-11-24 — daily check: upstream frozen, verified retry-chain reply, new-report triage
 
