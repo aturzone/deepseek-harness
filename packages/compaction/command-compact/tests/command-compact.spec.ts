@@ -221,6 +221,34 @@ describe('/compact human command', () => {
     expect(execution.commandId).toBe(expectLastLifecycle(test, '', execution.result))
   })
 
+  it.each([
+    ['a missing cause', undefined],
+    ['a cause without a code', new Error('summarizer unavailable')],
+    ['a non-string cause code', Object.assign(new Error('summarizer unavailable'), { code: 7 })],
+  ] as const)('keeps the generic summary failure for %s', async (_label, cause) => {
+    const test = await harness()
+    test.compact.failure = cause === undefined
+      ? new ManualCompactionError('summary', 'backend detail')
+      : new ManualCompactionError('summary', 'backend detail', { cause })
+    const execution = await run(test)
+    expect(execution.result).toEqual({
+      kind: 'error',
+      text: 'Compaction could not produce a useful summary. The attempt is recorded in the session log.',
+    })
+  })
+
+  it('names the provider failure code of a summary failure', async () => {
+    const test = await harness()
+    test.compact.failure = new ManualCompactionError('summary', 'backend detail', {
+      cause: Object.assign(new Error('connection reset'), { code: 'TRANSPORT' }),
+    })
+    const execution = await run(test)
+    expect(execution.result).toEqual({
+      kind: 'error',
+      text: 'Compaction could not produce a useful summary (TRANSPORT). The attempt is recorded in the session log.',
+    })
+  })
+
   it('preserves cancellation and unexpected implementation failures', async () => {
     const cancelled = await harness()
     const controller = new AbortController()

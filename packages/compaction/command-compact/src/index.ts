@@ -21,6 +21,13 @@ function assertNever(value: never): never {
 }
 /* v8 ignore stop */
 
+/** Stable failure code carried by an expected-failure cause, when the cause declares one. */
+function causeCode(error: ManualCompactionError): string | undefined {
+  const { cause } = error
+  if (typeof cause !== 'object' || cause === null || !('code' in cause)) return undefined
+  return typeof cause.code === 'string' ? cause.code : undefined
+}
+
 /** Convert expected capability failures into concise human-only outcomes. */
 function expectedFailure(error: ManualCompactionError): CommandResult {
   switch (error.code) {
@@ -36,11 +43,15 @@ function expectedFailure(error: ManualCompactionError): CommandResult {
         kind: 'error',
         text: 'The history selected for compaction changed before it could be replaced. The attempt is recorded in the session log.',
       }
-    case 'summary':
+    case 'summary': {
+      const code = causeCode(error)
       return {
         kind: 'error',
-        text: 'Compaction could not produce a useful summary. The attempt is recorded in the session log.',
+        text: code === undefined
+          ? 'Compaction could not produce a useful summary. The attempt is recorded in the session log.'
+          : `Compaction could not produce a useful summary (${code}). The attempt is recorded in the session log.`,
       }
+    }
     case 'commit':
       return {
         kind: 'error',
