@@ -523,6 +523,40 @@ rebased onto `origin/master` = `dsh-v0.2.3-alpha.2` (`4b399c39a6`); tips are in 
   recreated until the migration is done. Post-migration order: re-clone/restore checkout → rebase the 18 branches
   onto rc.4 → upgrade runtime + profile plugins to rc.4 → recreate the daily check.
 
+### 2026-11-27 — daily-run visibility fix + real-session `/compact` diagnosis
+
+**Why Atur saw no daily work (fixed).** The 09:30 schedule ran every day: four turns in Session
+`27152ed5` (Nov 24 ~11 min, Nov 25 ~14 min completed; Nov 26 failed after 79 s on an
+`opencode.ai:443` connect timeout; Nov 27 ~65 min completed). The reports existed only inside that
+separate Session, which Atur never opens. Added a second daily schedule `schedule-cf63a811`
+("DSH contributor daily report", 10:15 Asia/Tehran, target `this_session`) that reads the work
+Session's final assistant report and posts a short summary into the conversation Atur watches; it
+states plainly when the run failed or is still running. The work schedule stays isolated.
+
+**Diagnosed a real long-Session compaction failure (private Session, aggregates only).**
+46 turns / 7,567 events / 1,080 tool calls / ~1.6M chars of tool results. Six compaction attempts:
+two summaries landed (458,327 and 591,621 shadowed tokens), one `ECONNRESET` after 141 s, three
+`Request aborted` (2.7 s / 15 s / 218 s operator cancels). A later manual `/compact` succeeded, so
+the transaction is sound. The same Session recorded 64 model-request retries: 37 TIMEOUT (36 of them
+`pi-ai stream idle timeout after 300000ms`), 14 RATE_LIMIT, 12 TRANSPORT, 1 SERVER.
+
+**Two upstream gaps + contributions:**
+1. `compaction-basic` summarizes through a direct `ctx.llm.stream()` call, bypassing the agent-loop
+   retry extension point; one transient provider failure kills `/compact` while a normal turn would
+   retry. Proposed applying `ctx.llm.providerRetryPolicy(provider)` (bounded by
+   `compactionRetries`) or a shared non-turn retry seam.
+2. `command-compact` dropped the cause code from a summary failure. Branch
+   `fix/compact-failure-cause` @ `6eee3b7a86` surfaces the stable code (`… (TRANSPORT)`) with focused
+   tests and 100% branch coverage.
+
+Reported with redacted aggregates: Discussion #14414
+(https://github.com/deepseek-ai/deepseek-harness/discussions/14414) plus an addendum on #14176
+(`#discussioncomment-19944174`) tying the 36 watchdog kills to the transport-liveness fix
+(`fix/pi-ai-sse-keepalive-idle` @ `6607175c9d`).
+
+**Honest status:** upstream merged 0, no maintainer replies; the diagnostics branch is
+proposal-only. npm `next` remains 0.1.1 (install-irrelevant; `latest` = 0.1.2).
+
 ### 2026-11-27 — daily check covering the missed 2026-11-26 delivery: upstream frozen, context-pressure zero-usage fix shipped
 
 **Schedule note:** the 2026-11-26 06:00Z delivery arrived bundled with 2026-11-27 and no run executed between. This
@@ -653,40 +687,6 @@ awaiting artifact. merged upstream = 0.
 
 **Next:** analyse #14220's artifact if the reporter supplies it; keep the 21 fork branches current; the staged rc.5
 swap still needs a supervised host-shell window.
-
-### 2026-11-27 — daily-run visibility fix + real-session `/compact` diagnosis
-
-**Why Atur saw no daily work (fixed).** The 09:30 schedule ran every day: four turns in Session
-`27152ed5` (Nov 24 ~11 min, Nov 25 ~14 min completed; Nov 26 failed after 79 s on an
-`opencode.ai:443` connect timeout; Nov 27 ~65 min completed). The reports existed only inside that
-separate Session, which Atur never opens. Added a second daily schedule `schedule-cf63a811`
-("DSH contributor daily report", 10:15 Asia/Tehran, target `this_session`) that reads the work
-Session's final assistant report and posts a short summary into the conversation Atur watches; it
-states plainly when the run failed or is still running. The work schedule stays isolated.
-
-**Diagnosed a real long-Session compaction failure (private Session, aggregates only).**
-46 turns / 7,567 events / 1,080 tool calls / ~1.6M chars of tool results. Six compaction attempts:
-two summaries landed (458,327 and 591,621 shadowed tokens), one `ECONNRESET` after 141 s, three
-`Request aborted` (2.7 s / 15 s / 218 s operator cancels). A later manual `/compact` succeeded, so
-the transaction is sound. The same Session recorded 64 model-request retries: 37 TIMEOUT (36 of them
-`pi-ai stream idle timeout after 300000ms`), 14 RATE_LIMIT, 12 TRANSPORT, 1 SERVER.
-
-**Two upstream gaps + contributions:**
-1. `compaction-basic` summarizes through a direct `ctx.llm.stream()` call, bypassing the agent-loop
-   retry extension point; one transient provider failure kills `/compact` while a normal turn would
-   retry. Proposed applying `ctx.llm.providerRetryPolicy(provider)` (bounded by
-   `compactionRetries`) or a shared non-turn retry seam.
-2. `command-compact` dropped the cause code from a summary failure. Branch
-   `fix/compact-failure-cause` @ `6eee3b7a86` surfaces the stable code (`… (TRANSPORT)`) with focused
-   tests and 100% branch coverage.
-
-Reported with redacted aggregates: Discussion #14414
-(https://github.com/deepseek-ai/deepseek-harness/discussions/14414) plus an addendum on #14176
-(`#discussioncomment-19944174`) tying the 36 watchdog kills to the transport-liveness fix
-(`fix/pi-ai-sse-keepalive-idle` @ `6607175c9d`).
-
-**Honest status:** upstream merged 0, no maintainer replies; the diagnostics branch is
-proposal-only. npm `next` remains 0.1.1 (install-irrelevant; `latest` = 0.1.2).
 
 ### 2026-11-23 (evening) — standing daily autopilot, npm release, two verified units, staged runtime upgrade
 
