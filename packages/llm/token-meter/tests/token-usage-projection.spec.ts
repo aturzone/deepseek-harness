@@ -397,6 +397,18 @@ describe('contextPressure session projection', () => {
     expect(pressure(ctx, session).pressureTokens).toBe(250)
   })
 
+  it('keeps the last real pressure when a failed attempt settles with the zero-usage skeleton', async () => {
+    const { ctx, session } = await harness()
+    startStep(session, 1, 1)
+    usageChunk(session, { inputTokens: 100, outputTokens: 10 }, 1, 1)
+    finalUsage(session, { inputTokens: 100, outputTokens: 10 }, 1, 1)
+    // pi-ai settles an in-stream error with the all-zero usage object it built before
+    // the request; treating that placeholder as a sample reports impossible 0% occupancy.
+    startStep(session, 2, 1)
+    usageChunk(session, { inputTokens: 0, outputTokens: 0, totalTokens: 0 }, 2, 1)
+    expect(pressure(ctx, session)).toEqual({ pressureTokens: 100, projectedTokens: 100 })
+  })
+
   it('carries the newest recorded capacity and replaces it on a model switch', async () => {
     const { ctx, session } = await harness()
     startStep(session, 1, 1)
@@ -448,7 +460,7 @@ describe('contextPressure session projection', () => {
     const checkpoint = JSON.parse(JSON.stringify(
       ctx.sessionProjections.checkpoint(session),
     )) as ReturnType<typeof ctx.sessionProjections.checkpoint>
-    expect(checkpoint.contextPressure?.ver).toBe(6)
+    expect(checkpoint.contextPressure?.ver).toBe(7)
 
     await meterFiber.dispose()
     expect(ctx.sessionProjections.snapshot(session).values).not.toHaveProperty('contextPressure')

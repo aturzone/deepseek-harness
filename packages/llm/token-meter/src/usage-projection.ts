@@ -162,11 +162,13 @@ export const tokenUsageProjectionDefinition = {
  * and a replacement shrinks it by its logged shadow price. A replacement
  * without a claim preserves the previous total. A usage sample is stamped
  * BEFORE the same event joins the surface, so an `assistant/message` anchors
- * against the surface its own request saw.
+ * against the surface its own request saw. A zero-pressure sample is the
+ * zero-usage object pi-ai builds before sending: it is not a measurement, so
+ * it leaves the previous sample in place.
  */
 export const contextPressureProjectionDefinition = {
   key: 'contextPressure',
-  stateVersion: 6,
+  stateVersion: 7,
   stateSchema: contextPressureStateSchema,
   init: () => ({ surfaceTokens: 0 }),
   apply: (state, event) => {
@@ -186,7 +188,11 @@ export const contextPressureProjectionDefinition = {
     const usage = usageOf(event)
     if (usage !== undefined) {
       const pressureTokens = pressureFrom(usage)
-      if (pressureTokens !== next.pressureTokens || next.sampledSurfaceTokens !== next.surfaceTokens) {
+      // A failed request settles with pi-ai's untouched zero-usage object; a request
+      // always carries the system prompt, so zero pressure is not a measurement.
+      // Keeping the last real sample reports unknown instead of impossible 0% occupancy.
+      if (pressureTokens > 0
+        && (pressureTokens !== next.pressureTokens || next.sampledSurfaceTokens !== next.surfaceTokens)) {
         next = { ...next, pressureTokens, sampledSurfaceTokens: next.surfaceTokens }
       }
     }
