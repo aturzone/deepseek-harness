@@ -50,12 +50,14 @@ rebased onto `origin/master` = `dsh-v0.2.3-alpha.2` (`4b399c39a6`); tips are in 
 | 28 | `dsh-session-doctor` released via Git and announced (Discussions #12927, #11971, #11981) | plugin release | **released** (GitHub + npm `latest` 0.1.2) | repo https://github.com/aturzone/dsh-session-doctor · npm `@aturdana/dsh-session-doctor` 0.1.2 via OIDC trusted publishing (GitHub Actions run 45233390344, provenance signed; repo commit `1768b6d`) · announcement `#12927` · links: #11971 `#discussioncomment-19535608`, #11981 `#discussioncomment-19535609` | Scoped package (the unscoped name belongs to an unrelated maintainer); `next` still points at 0.1.1 unless promoted |
 | 29 | pi-ai stream idle watchdog ignores SSE keepalive comments (Discussion #14176) | report + patch | **published**, awaiting reply | comments: `#discussioncomment-19837958`, retry-chain verification `#discussioncomment-19849579`, patch-artifact verification `#discussioncomment-19880652` · branch `fix/pi-ai-sse-keepalive-idle` @ `6607175c9d` · keyless fake-timer repro (100 ms idle, `: keepalive` every 80 ms): master TIMEOUT, fixed tree completes; 509 package tests | Independently re-verifies a community reference patch and adds the failing-before test; transport-only fetch pulse, Gemini routes excluded |
 | 30 | Repeated provider `tool_call` id makes the session log unloadable (Discussion #14149) | report + patch | **published**, awaiting reply | comment: `#discussioncomment-19837984` · branch `fix/session-duplicate-call-id` @ `db7251bf16` · synthetic two-turn V4 replay fails pre-fix with `PTC dispatch repeats subCallId`, loads post-fix; v3-to-v4 package 407 tests | Reader accepts a settled subCallId start; provider-side repetition is synthetic in the repro, as stated in the comment |
-| 31 | Assistant reply contains the next turn's user message and runtime context (Discussion #14220) | triage | **published**, awaiting artifact | comments: `#discussioncomment-19849586`, artifact follow-up `#discussioncomment-19880651` · injection points `packages/core/agent-loop/src/agent.ts:290,303-306,396`; requested the decoded JSONL slice around seq 21135, the adjacent `turn/start`/`step/start`/`inbox spliced`/`user/message` events, and the session header versions | A `preparing turn 1509` block cannot be in the request for a message recorded under turn 1506; either the event's turn is misattributed or the request was assembled for the later turn, and the slice separates them. Reporter supplied a summary and rejects both; the raw JSON for seq 21129/21133/21135 plus a whole-log search for the plain phrase and the exact fabricated turn-1509 block are the remaining discriminator |
+| 31 | Assistant reply contains the next turn's user message and runtime context (Discussion #14220) | triage | **answered** — model output, no harness defect found | comments: `#discussioncomment-19849586`, `#discussioncomment-19880651`, `#discussioncomment-19943513` · the reporter's chunk list shows `"user","不要","了"` and the whole turn-1509 block arriving as assistant text chunks, i.e. the model continued the transcript format from logged runtime-context history | Duplicate-`deepseek-flash` compat hypothesis (Lin-Lionel) not reproducible on installed pi-ai 1.3.0: one `chat:deepseek-flash` entry plus `deepseek-v4-pro`, both carrying `thinkingFormat: "deepseek"`; asked for the reporter's file path and versions. A reasoning-in-`text` artifact would be a separate issue |
+| 33 | Context occupancy drops to 0% after a failed API request (Discussion #14387) | report + patch | **published**, awaiting reply | comment: `#discussioncomment-19943510` · branch `fix/context-pressure-zero-usage-sample` @ `fee76af0a8` · regression (real sample then error-attempt zero sample expects 100/100) fails pre-fix with 0/0; token-meter 138/138, `tsc -b` 0, oxlint 0, changed file 100% coverage | Only positive-pressure samples are accepted; first-failure sessions read unknown instead of 0%; `contextPressure` stateVersion 6 → 7 so old checkpoints refold |
+| 34 | Lone surrogate from a split emoji bricks the session (Discussions #14406/#14391) | report (re-confirmation) | **published**, same carrier as item 16 | comments: `#discussioncomment-19943511`, `#discussioncomment-19943512` · branch `fix/tool-result-well-formed` @ `cb1a270940` sanitizes at all three `tool/result` writers; `run_code` output flows through the tool batch writer | Workaround until a release carries it: `slice(...).toWellFormed()` in `run_code`; repairing a poisoned session log is unsupported |
 | 32 | `team_task_list` rejects an empty-string `owner` combined with `unowned` (Discussion #14280) | report + patch | **published**, awaiting reply | comment: `#discussioncomment-19880649` · branch `fix/team-task-list-empty-owner` @ `e05381cc0a` · regression fails pre-fix with the reported `owner and unowned filters cannot be combined`; owning file 46/46, `tsc -b` 0, oxlint 0, changed file 100% coverage | Trim before the mutual-exclusion guard and treat empty/whitespace as no filter (also for name resolution); a real owner name + `unowned` still rejects INVALID_ARGS |
 
 ## Baseline facts
 
-- Upstream accepted/merged: **0** (re-verified 2026-11-25; no merged PR has ever existed).
+- Upstream accepted/merged: **0** (re-verified 2026-11-27; no merged PR has ever existed).
 - Upstream business: external PRs closed (`CONTRIBUTING.md:9`); Issues disabled; Discussions only.
 - Community expert engagement: PerryLink (not DeepSeek-affiliated) confirmed the settings bug on `fcc0ad46` and proposed a refinement we implemented.
 - Patches are on the fork `aturzone/deepseek-harness`; upstream `origin` remains canonical.
@@ -520,6 +522,56 @@ rebased onto `origin/master` = `dsh-v0.2.3-alpha.2` (`4b399c39a6`); tips are in 
   jobs on this host; host stays on rc.3. Handoff recorded in brain (`journal`, `memory`); daily check is not
   recreated until the migration is done. Post-migration order: re-clone/restore checkout → rebase the 18 branches
   onto rc.4 → upgrade runtime + profile plugins to rc.4 → recreate the daily check.
+
+### 2026-11-27 — daily check covering the missed 2026-11-26 delivery: upstream frozen, context-pressure zero-usage fix shipped
+
+**Schedule note:** the 2026-11-26 06:00Z delivery arrived bundled with 2026-11-27 and no run executed between. This
+entry covers both; the previous run's notification state had no unanswered item, and the only tracked-thread activity
+in the gap was the #14220 reporter follow-up handled below.
+
+**Sync:** `git fetch origin upstream` — `upstream/master` = `origin/master` = `master` = `4b399c39a6` (0 ahead,
+0 behind). Upstream has now been frozen for 5 days. No rebase needed: all 22 local branches are 0 behind
+`origin/master` and their fork tips match; the fork-only `docs/cordis-skill-replacement-restart` remains the single
+RETIRE-CANDIDATE (retained).
+
+**New report fixed (#14387, filed 2026-11-26):** after a failed API request the context-occupancy ring drops to 0%.
+`toStreamChunks` yields `mapUsage(event.error.usage)` for pi-ai's in-stream error settlement
+(`packages/llm/llm-pi-ai/src/stream.ts:239`) — the all-zero usage object pi-ai builds before sending — and `usageOf()`
+samples every attempt settlement, so the context-pressure fold overwrote `pressureTokens` with 0, stamped
+`sampledSurfaceTokens` to the current surface, and `projectedTokens` computed to 0. Fixed by accepting only samples
+with positive prompt pressure (`input + cacheRead + cacheWrite > 0`) and advancing the surface stamp only with them; a
+session whose first request fails now reads unknown (no ring) instead of 0%. Fold semantics changed, so
+`contextPressure` stateVersion moves 6 → 7 and old checkpoints refold. Branch
+`fix/context-pressure-zero-usage-sample` @ `fee76af0a8` (fork), reported `#discussioncomment-19943510`. Evidence: the
+new regression (a real 100-token sample, then a failed attempt's zero sample, expects `{100, 100}`) fails pre-fix with
+`{0, 0}` and passes post-fix; token-meter 138/138; `tsc -b packages/llm/token-meter` exit 0; oxlint 0 errors on both
+files; `packages/llm/token-meter/src/**` coverage 100%.
+
+**New lone-surrogate reports answered (#14406, #14391):** both reproduce the carrier item 16 already fixes — a
+`run_code` output truncated mid-emoji persists a lone high surrogate and every later request fails at the same column.
+Replied (`#discussioncomment-19943511`, `#discussioncomment-19943512`) with the three `tool/result` writers covered by
+`fix/tool-result-well-formed` @ `cb1a270940` (tool batch, agent-loop recovery, compaction pruner), the 2026-11-23
+rebase evidence, and the short-term `slice(...).toWellFormed()` workaround. Not merged; no acceptance claimed.
+
+**#14220 follow-up:** the reporter's chunk list shows `"user","不要","了"` and the whole turn-1509 block arriving as
+assistant text chunks, so the model continued the transcript format from its own logged runtime-context history
+(`agent.ts:457,466`; `runtime-context.ts:76-97`) — no request-assembly or turn-misattribution defect found. Replied
+`#discussioncomment-19943513`. Also checked Lin-Lionel's duplicate-`deepseek-flash` compat hypothesis: installed pi-ai
+1.3.0 `dist/providers/data/deepseek.json` has one `chat:deepseek-flash` entry plus `deepseek-v4-pro`, and both carry
+`thinkingFormat: "deepseek"` and `requiresReasoningContentOnAssistantMessages: true`; the openrouter/fireworks
+similarly named entries are different provider routes. Asked for the reporter's file path and versions.
+
+**Status changes:** new row 33 (#14387) = **published**, branch offered; new row 34 (#14406/#14391) = **published**,
+same carrier as item 16; row 31 (#14220) = **answered** (model output). merged upstream = 0.
+
+**Checks run:** `pnpm exec vitest run packages/llm/token-meter/tests/` 138/138; `pnpm exec tsc -b
+packages/llm/token-meter` 0; `pnpm exec tsx scripts/run-oxlint.ts <src + test>` 0 errors; coverage scoped to
+`packages/llm/token-meter/src/**` 100%.
+
+**Blocked by:** maintainer attention unchanged (still zero reviewer replies); upstream repository frozen for 5 days.
+
+**Next:** keep the 23 fork patch branches current; decode any further #14220/#14406 artifacts if supplied; the staged
+rc.5 swap still needs a supervised host-shell window.
 
 ### 2026-11-25 — daily check: upstream still frozen, team_task_list empty-owner fix shipped
 
