@@ -545,7 +545,7 @@ session whose first request fails now reads unknown (no ring) instead of 0%. Fol
 `fix/context-pressure-zero-usage-sample` @ `fee76af0a8` (fork), reported `#discussioncomment-19943510`. Evidence: the
 new regression (a real 100-token sample, then a failed attempt's zero sample, expects `{100, 100}`) fails pre-fix with
 `{0, 0}` and passes post-fix; token-meter 138/138; `tsc -b packages/llm/token-meter` exit 0; oxlint 0 errors on both
-files; `packages/llm/token-meter/src/**` coverage 100%.
+files; changed file `usage-projection.ts` 100% statements/branches/functions/lines.
 
 **New lone-surrogate reports answered (#14406, #14391):** both reproduce the carrier item 16 already fixes — a
 `run_code` output truncated mid-emoji persists a lone high surrogate and every later request fails at the same column.
@@ -566,7 +566,7 @@ same carrier as item 16; row 31 (#14220) = **answered** (model output). merged u
 
 **Checks run:** `pnpm exec vitest run packages/llm/token-meter/tests/` 138/138; `pnpm exec tsc -b
 packages/llm/token-meter` 0; `pnpm exec tsx scripts/run-oxlint.ts <src + test>` 0 errors; coverage scoped to
-`packages/llm/token-meter/src/**` 100%.
+`packages/llm/token-meter/src/usage-projection.ts` 100% S/B/F/L.
 
 **Blocked by:** maintainer attention unchanged (still zero reviewer replies); upstream repository frozen for 5 days.
 
