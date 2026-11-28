@@ -33,7 +33,7 @@ rebased onto `origin/master` = `dsh-v0.2.3-alpha.2` (`4b399c39a6`); tips are in 
 | 10 | Windows App Execution Alias rejected by executable resolution (Discussion #12275) | report + patch | **published**, awaiting reply | comments: `#discussioncomment-19416771`, test-isolation note `#discussioncomment-19417090` · branch `fix/windows-alias-executable` @ `8fc89ac081` (2 commits) | Offer shared util predicate if maintainers prefer one helper |
 | 11 | Electron node-mode env leaks into "Open in app" launches (Discussions #9599/#12287) | report + patch | **published**, awaiting reply | comment: `#discussioncomment-19417159` · branch `fix/open-in-app-electron-env` @ `58a9fb538d` | Same fix should also satisfy the older #9599 thread |
 | 12 | Surrogate-pair-splitting truncation poisons sessions (Discussions #11476/#11831) | report + patch | **published**, awaiting reply | comments: `#discussioncomment-19417303`, audit addendum `#discussioncomment-19418036` · branch `fix/truncation-surrogate-pairs` @ `7d21dde5b6` (2 commits) | `run_code` printed output and PTC cancellation carriers remain unverified |
-| 23 | Managed-launch runner seams are silently ignored on production spawn paths (Discussions #12532/#11893) | report + patch | **published**, awaiting reply | comment: `#discussioncomment-19457844` · branch `fix/subprocess-managed-internals` @ `ab42e3b983` | Carries runnerInvocation/resolve/available into Windows-Job and Linux-scope launches |
+| 23 | Managed-launch runner seams are silently ignored on production spawn paths (Discussions #12532/#11893) | report + patch | **published**, awaiting reply | comments: `#discussioncomment-19457844`, apply-check verification `#discussioncomment-19970453`, tip correction `#discussioncomment-19970454` · branch `fix/subprocess-managed-internals` @ `d631ef321f` (rebased 2026-11-23; re-verified 2026-11-28) · patch applies cleanly to `4b399c39a6` (`git apply --check`) | Carries runnerInvocation/resolve/available into Windows-Job and Linux-scope launches; community production A/B numbers are the reporter's own, not independently verified here |
 | 22 | Accumulated `dsh-auth-*` cookies can race the desktop boot cleanup (Discussion #12360) | report + patch | **published**, awaiting reply | comment: `#discussioncomment-19438771` · branch `fix/desktop-cookie-cleanup-order` @ `495f17a0e4` | Hardens ordering; which Electron session holds the cookies needs the reporter's store |
 | 21 | Sidebar shows the finished dot (and hides the clock) while a scheduled task still targets the Session (Discussion #12271) | report + patch | **published**, awaiting reply | comment: `#discussioncomment-19437819` · branch `fix/schedule-completion-gate` @ `a394b726db` | Adds a dynamic `CompletionGate` seam on ui-session; ui-schedule withholds the reminder while an active task targets the Session |
 | 20 | RTL has no core direction declaration (feature request #10144; ecosystem packs #11672/#7404/#8935) | feature | **published**, awaiting reply | comment: `#discussioncomment-19437192` · branch `feat/locale-writing-direction` @ `eaf80faca4` | Delivers `<html dir>` from language packs; per-component logical-CSS conversion remains |
@@ -53,11 +53,12 @@ rebased onto `origin/master` = `dsh-v0.2.3-alpha.2` (`4b399c39a6`); tips are in 
 | 31 | Assistant reply contains the next turn's user message and runtime context (Discussion #14220) | triage | **answered** — model output, no harness defect found | comments: `#discussioncomment-19849586`, `#discussioncomment-19880651`, `#discussioncomment-19943513` · the reporter's chunk list shows `"user","不要","了"` and the whole turn-1509 block arriving as assistant text chunks, i.e. the model continued the transcript format from logged runtime-context history | Duplicate-`deepseek-flash` compat hypothesis (Lin-Lionel) not reproducible on installed pi-ai 1.3.0: one `chat:deepseek-flash` entry plus `deepseek-v4-pro`, both carrying `thinkingFormat: "deepseek"`; asked for the reporter's file path and versions. A reasoning-in-`text` artifact would be a separate issue |
 | 33 | Context occupancy drops to 0% after a failed API request (Discussion #14387) | report + patch | **published**, awaiting reply | comment: `#discussioncomment-19943510` · branch `fix/context-pressure-zero-usage-sample` @ `fee76af0a8` · regression (real sample then error-attempt zero sample expects 100/100) fails pre-fix with 0/0; token-meter 138/138, `tsc -b` 0, oxlint 0, changed file 100% coverage | Only positive-pressure samples are accepted; first-failure sessions read unknown instead of 0%; `contextPressure` stateVersion 6 → 7 so old checkpoints refold |
 | 34 | Lone surrogate from a split emoji bricks the session (Discussions #14406/#14391) | report (re-confirmation) | **published**, same carrier as item 16 | comments: `#discussioncomment-19943511`, `#discussioncomment-19943512` · branch `fix/tool-result-well-formed` @ `cb1a270940` sanitizes at all three `tool/result` writers; `run_code` output flows through the tool batch writer | Workaround until a release carries it: `slice(...).toWellFormed()` in `run_code`; repairing a poisoned session log is unsupported |
+| 35 | UTF-8 BOM in the profile `package.json` crashes startup (Discussion #14459) | report + patch | **published**, awaiting reply | comment: `#discussioncomment-19970452` · branch `fix/profile-manifest-utf8-bom` @ `2f115e4b59` · regression fails pre-fix with the reported `Unexpected token '\uFEFF'`; app-boot 5,688/5,688, `tsc -b` 0, oxlint 0, `profile.ts` 100% coverage | Strips one leading BOM before `JSON.parse`; other malformed manifest content still fails loud. Workaround on rc.5: re-save the manifest as UTF-8 without BOM |
 | 32 | `team_task_list` rejects an empty-string `owner` combined with `unowned` (Discussion #14280) | report + patch | **published**, awaiting reply | comment: `#discussioncomment-19880649` · branch `fix/team-task-list-empty-owner` @ `e05381cc0a` · regression fails pre-fix with the reported `owner and unowned filters cannot be combined`; owning file 46/46, `tsc -b` 0, oxlint 0, changed file 100% coverage | Trim before the mutual-exclusion guard and treat empty/whitespace as no filter (also for name resolution); a real owner name + `unowned` still rejects INVALID_ARGS |
 
 ## Baseline facts
 
-- Upstream accepted/merged: **0** (re-verified 2026-11-27; no merged PR has ever existed).
+- Upstream accepted/merged: **0** (re-verified 2026-11-28; no merged PR has ever existed).
 - Upstream business: external PRs closed (`CONTRIBUTING.md:9`); Issues disabled; Discussions only.
 - Community expert engagement: PerryLink (not DeepSeek-affiliated) confirmed the settings bug on `fcc0ad46` and proposed a refinement we implemented.
 - Patches are on the fork `aturzone/deepseek-harness`; upstream `origin` remains canonical.
@@ -556,6 +557,47 @@ Reported with redacted aggregates: Discussion #14414
 
 **Honest status:** upstream merged 0, no maintainer replies; the diagnostics branch is
 proposal-only. npm `next` remains 0.1.1 (install-irrelevant; `latest` = 0.1.2).
+
+### 2026-11-28 — daily check: upstream frozen, profile-manifest BOM fix, subprocess fix re-verified
+
+**Sync:** `git fetch origin upstream` — `upstream/master` = `origin/master` = `master` = `4b399c39a6` (0 ahead, 0 behind;
+frozen for 6 days). No rebase needed: all 24 local branches are 0 behind `origin/master` and their fork tips match; the
+fork-only RETIRE-CANDIDATE remains retained.
+
+**New report fixed (#14459, filed 2026-11-27):** a profile `package.json` saved with a UTF-8 BOM (common from Windows
+editors) crashes startup — `readProfileManifest` parsed the raw text (`packages/boot/app-boot/src/profile.ts:557`) and
+`JSON.parse` rejects U+FEFF. Branch `fix/profile-manifest-utf8-bom` @ `2f115e4b59` strips one leading BOM before the
+parse; the existing object validation still rejects other malformed content. Reported
+`#discussioncomment-19970452`. Evidence: the regression writes a BOM-prefixed manifest and reads its bundle list;
+pre-fix it throws the reported `Unexpected token '\uFEFF'`, post-fix app-boot is 5,688/5,688 with `profile.ts` at 100%
+statements/branches/functions/lines, `tsc -b packages/boot/app-boot` exit 0, oxlint 0 errors on both files.
+
+**Item 23 re-verified; mentions answered.** boyingliu01 cross-posted production A/B material to #11893/#12532 and their
+plugin repo's release-blocker issue (`boyingliu01/dsh-aot-runner#35`) cites our branch. Fresh checks on `4b399c39a6`:
+the managed branch still calls both `launch*` helpers without `internals`
+(`packages/subprocess/subprocess-local/src/index.ts:215-223`), and the current tip `d631ef321f` — the row's old
+`ab42e3b983` pointer was stale — applies cleanly to a clean master checkout
+(`git diff master..fix/subprocess-managed-internals | git apply --check` exit 0, one commit, 116-line diff). Replied
+`#discussioncomment-19970453` (#11893) and corrected the pointer `#discussioncomment-19970454` (#12532), with the
+boundary stated: the 59.1–59.6% A/B figures are the reporter's measurements, not independently verified here, and the
+intake policy (no external PRs) is unchanged.
+
+**Public channel:** four notifications cleared (#14220 reply thread, #12532/#11893 mentions, third-party issue mention).
+#14220 is fully closed out: the reporter and the other participant both confirmed model-generated continuation, and
+Lin-Lionel retracted the duplicate-`deepseek-flash` claim (their ASAR search had crossed file boundaries — the packaged
+`deepseek.json` has one flash entry with both compat fields). Still zero maintainer replies anywhere.
+
+**Status changes:** new row 35 (#14459) = **published**, branch offered; row 23 proof extended and tip corrected.
+merged upstream = 0.
+
+**Checks run:** `pnpm exec vitest run packages/boot/app-boot/tests/` 5,688/5,688 (coverage scoped to `profile.ts`:
+100%); `pnpm exec tsc -b packages/boot/app-boot` 0; oxlint 0 on both changed files; `git apply --check` of the
+subprocess branch diff on clean master.
+
+**Blocked by:** maintainer attention unchanged (no reviewer replies); upstream repository frozen for 6 days.
+
+**Next:** keep the 25 fork patch branches current (24 local + retire-candidate); decode any fresh artifacts supplied on
+#14459/#11893; the staged rc.5 swap still needs a supervised host-shell window.
 
 ### 2026-11-27 — daily check covering the missed 2026-11-26 delivery: upstream frozen, context-pressure zero-usage fix shipped
 
